@@ -27,6 +27,8 @@ using namespace std;
  * Use (for example):
  * ./UnrealEditor-Cmd.exe "X:\PixoVR\Documentation_5_0\Documentation_5_0.uproject" -nullrhi -nopause -nosplash -run=BlueprintDoxygen -LogCmds="global none, LOG_DOT all" -NoLogTimes -OutputMode=doxygen -OutputDir="X:\PixoVR\documentation\docs-root\documentation\pages\blueprints2"
  * ... and without the end parameters for usage message.
+ * 
+ * ./UnrealEditor-Cmd.exe "X:\PixoVR\Documentation_5_0\Documentation_5_0.uproject" -run=BlueprintDoxygen -LogCmds="global none, LOG_DOT all" -NoLogTimes -OutputMode=doxygen -OutputDir="X:\PixoVR\documentation\docs-root\documentation\pages\blueprints2"
  */
 UCLASS()
 class UBlueprintDoxygenCommandlet : public UCommandlet
@@ -74,6 +76,7 @@ protected:
 		bubble,
 		route,
 		variable,
+		variableset,
 		compact,
 		composite,
 		function,
@@ -81,89 +84,52 @@ protected:
 		tunnel,
 		event,
 		path,
+		spawn,
 		MAX
 	};
 
-	/** Handles setting config variables from the command line
-	* @Param Params command line parameter string
-	*/
+	//main control
 	virtual void InitCommandLine(const FString& Params);
-
-	/** Stores FAssetData for every BlueprintAsset inside of the BlueprintAssetList member variable */
 	virtual void BuildAssetLists();
-
-	/** Loads and reports node information about all blueprints in the BlueprintAssetList member variable */
-	virtual void ReportBlueprints();
-
-	/** Loads and reports node information about all materials in the MaterialAssetList member variable */
-	virtual void ReportMaterials();
-
-	/** Determines if we should try and Load / Report the asset based on config variables and module path
-	* @Param Asset What asset to check
-	* @Return True if we should build the asset
-	*/
 	virtual bool ShouldReportAsset(FAssetData const& Asset) const;
+	virtual bool ShouldReportObject(UObject* object) const;
+	virtual void LogResults();
 
-	/** Handles creating and reporting a group to groups.dox.
-	* Will only add groups once to the output.
-	* @Param FString groupName to report.
-	*/
+	//groups
 	virtual void ReportGroup(FString groupName, FString groupNamePretty, FString brief, FString details);
 	virtual bool ClearGroups();
 
-	/** Handles attempting to report an individual blueprint asset.
-	* @Param Blueprint Asset to report.
-	*/
-	virtual void ReportBlueprint(FString prefix, FString assetName, UBlueprint* Blueprint);
+	//reporting
+	virtual void ReportBlueprints();
+	virtual void ReportBlueprint(FString prefix, UBlueprint* Blueprint);
 
-	/** Handles attempting to report an individual material asset.
-	* @Param Material Asset to report.
-	*/
+	virtual void ReportMaterials();
 	virtual void ReportMaterial(FString prefix, FString assetName, UMaterial* Material);
 
-	/** Handles attempting to report an individual graph.
-	* @Param UEdGraph Graph to report.
-	* @Param FString prefix to prepend.
-	*/
-	virtual void ReportGraph(UEdGraph* Graph, FString prefix);
+	virtual void ReportGraph(FString prefix, UEdGraph* Graph);
+	virtual void ReportNode(FString prefix, UEdGraphNode* Node);
+	virtual void ReportPin(FString prefix, UEdGraphPin* Pin);
+	//virtual void ReportSplittablePin(UEdGraphPin* Pin, FString prefix);
 
-	/** Handles attempting to report an individual node.
-	* @Param UEdGraphNode Node to report.
-	* @Param FString prefix to prepend.
-	*/
-	virtual void ReportNode(UEdGraphNode* Node, FString prefix);
-
-	/** Handles attempting to report an individual pin from a node.
-	* @Param UEdGraphPin Pin to report.
-	*/
-	virtual void ReportPin(UEdGraphPin* Pin, FString prefix);
-	virtual void ReportSplittablePin(UEdGraphPin* Pin, FString prefix);
-
-	/** Opens a file for writing.  Doxygen Mode Only.  This points 
-	* 'out' to the file, and closes 'outfile' if it is currently open.
-	* @Param FString fpath to open.
-	*/
+	//files
 	virtual bool OpenFile(FString fpath, bool append=false);
-
-	/** Closes 'outfile' if it is open.  Doxygen Mode Only.	*/
 	virtual bool CloseFile();
-
-	/** Handles retrieving data about a blueprint */
 	bool CreateThumbnailFile(UObject *object, FString pngPath);
+	FString GetTrimmedConfigFilePath(FString path);
 
-	/** Handles retrieving data about a node
-	* @Param UEdGraphNode Node to report.
-	*/
+	//blueprint stuff
+	FString GetClassName(UClass* blueprint);
+	FString GetGraphCPP(UEdGraph* graph, FString _namespace="");
+
+	//node stuff
 	NodeType GetNodeType(UEdGraphNode* node, NodeType defaultType=NodeType::none);
 	FString GetNodeTypeGroup(NodeType type);
 	FString GetNodeIcon(UEdGraphNode* node);
-	FString GetNodeURL(UEdGraphNode* node);
+	FString GetNodeURL(UEdGraphNode* node, EEdGraphPinDirection direction = EEdGraphPinDirection::EGPD_MAX);
 	FString GetNodeTooltip(UEdGraphNode* node);
-	FString GetDelegateIcon(UEdGraphNode* node);
+	FString GetDelegateIcon(UEdGraphNode* node, bool *hasDelegate=NULL);
 
-	/** Handles retrieving data about a pin
-	* @Param UEdGraphPin Pin to report.
-	*/
+	//pin stuff
 	bool PinShouldBeVisible(UEdGraphPin* pin);
 	bool isDelegatePin(UEdGraphPin* pin);
 	FString GetPinLabel(UEdGraphPin* pin);
@@ -172,18 +138,18 @@ protected:
 	FString GetPinIcon(UEdGraphPin* pin);
 	FString GetPinColor(UEdGraphPin* pin);
 	FString GetPinPort(UEdGraphPin* pin);
+	FString GetPinURL(UEdGraphPin* pin);
 	FString GetPinDefaultValue(UEdGraphPin* pin);
 
-	/** Handles outputting the results to the log */
-	virtual void LogResults();
-
+	//types and maps
 	static TMap<FString, NodeType>					NodeType_e;
 	static TMap<FString, FString>					NodeIcons;
 	static TMap<FString, TPair<FString, FString> >	PinIcons;
 
-	/** CommandLine Config Variables */
+	//command line variables
 	int			outputMode;
 	FString		outputDir = "-";					//use "-" for stdout
+	FString		currentDir = "";
 	FString		stylesheet = "doxygen-pixo.css";
 
 	/** runtime */
@@ -196,6 +162,7 @@ protected:
 	TArray<FString> ObjectNames;
 	TMap<FString, FString>	PinConnections;			//intended to be [SOURCE:port:_ -- DEST:port:_] [color], which forces uniqueness of connections despite direction
 	TMap<UEdGraph*, FString> GraphDescriptions;		//assuming parent graphs are parsed before children.  This is the description provided in the collapse node of the parent.
+	TMap<FString, TArray<FString>> GraphCalls;				//any node (url) mentioned in a graph is appended to the call graph.
 
 	/** Variables to store overall results */
 	int TotalGraphsProcessed;
@@ -218,17 +185,18 @@ protected:
 	FString prepTemplateString(FString prefix, vmap vars, FString string);
 	FString getCppType(FProperty *prop);
 
-	void writeBlueprintHeader(UBlueprint *blueprint, FString group, FString qualifier, FString assetName, FString packageName, FString packageDescription, FString parentClass, int graphCount);
-	void writeMaterialHeader(UMaterial* material, FString group, FString qualifier, FString assetName, FString packageName, FString packageDescription, FString parentClass, int graphCount);
-
-	void writeAssetMembers(UBlueprint *object, FString which);
+	void writeAssetMembers(UBlueprint* object, FString which);
 	void writeAssetFooter();
+	void writeAssetCalls();
+
+	void writeBlueprintHeader(UBlueprint *blueprint, FString group, FString qualifier, FString packageName, int graphCount);
+	void writeMaterialHeader(UMaterial* material, FString group, FString qualifier, FString assetName, FString packageName, FString packageDescription, FString parentClass, int graphCount);
 
 	void writeGraphHeader(FString prefix, UEdGraph *graph, FString qualifier);
 	void writeGraphFooter(FString prefix, UEdGraph *graph);
 	void writeGraphConnections(FString prefix);
 
-	FString getNodeTemplate(NodeType type);
+	FString getNodeTemplate(NodeType type, bool hasDelegate=false);
 	FString prepNodePortRows(FString prefix, UEdGraphNode *node);
 	void writeNodeBody(FString prefix, UEdGraphNode *node);
 

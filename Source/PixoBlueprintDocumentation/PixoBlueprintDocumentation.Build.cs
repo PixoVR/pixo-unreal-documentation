@@ -42,7 +42,8 @@ public class PixoBlueprintDocumentation : ModuleRules
                 "UnrealEd",
                 "BlueprintGraph",
                 "ImageWrapper",
-                "HTTP"
+                "HTTP",
+                "Json"
 				// ... add private dependencies that you statically link with here ...	
 			}
             );

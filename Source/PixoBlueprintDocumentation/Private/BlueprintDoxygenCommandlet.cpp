@@ -9,6 +9,12 @@
 
 #include "K2Node.h"
 #include "K2Node_Composite.h"
+#include "K2Node_Variable.h"
+//#include "K2Node_VariableSet.h"
+#include "K2Node_MacroInstance.h"
+#include "K2Node_CallFunction.h"
+//#include "K2Node_SpawnActor.h"
+//#include "K2Node_ConstructObjectFromClass.h"
 //#include "K2Node_PromotableOperator.h"
 #include "Kismet2/BlueprintEditorUtils.h"
 
@@ -21,10 +27,13 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Internationalization/Regex.h"
+//#include "Serialization/JsonSerializerMacros.h"
 
 #include "IImageWrapperModule.h"
 #include "IImageWrapper.h"
 #include "UObject/UObjectThreadContext.h"
+
+#include "GenericPlatform/GenericPlatformFile.h"
 //#include "GenericPlatform/GenericPlatformMisc.h"
 //#include "GenericPlatform/GenericPlatformHttp.h"
 //#include "PlatformHttp.h"
@@ -57,6 +66,7 @@ UBlueprintDoxygenCommandlet::UBlueprintDoxygenCommandlet(const FObjectInitialize
 	BlueprintStyle.Add("_FONTNAME_", "Arial");
 	//BlueprintStyle.Add("_FONTNAME_", "Helvetica");
 	BlueprintStyle.Add("_FONTSIZE_", "10");				//for header/title
+	BlueprintStyle.Add("_FONTSIZE2_", "9");				//for header/title2
 	BlueprintStyle.Add("_FONTCOLOR_", "black");			//for header/title
 	BlueprintStyle.Add("_FONTSIZEPORT_", "10");			//for pins
 	BlueprintStyle.Add("_FONTSIZECOMMENT_", "18");		//comment size
@@ -97,7 +107,7 @@ int32 UBlueprintDoxygenCommandlet::Main(const FString& Params)
 
 	BuildAssetLists();
 	ReportBlueprints();
-	ReportMaterials();
+	//ReportMaterials();
 
 	LogResults();
 
@@ -236,6 +246,22 @@ bool UBlueprintDoxygenCommandlet::ShouldReportAsset(FAssetData const& Asset) con
 	return bShouldReport;
 }
 
+bool UBlueprintDoxygenCommandlet::ShouldReportObject(UObject* object) const
+{
+	bool bShouldReport = true;
+	FString path = object->GetPathName();
+
+	//wcout << "SRO path: " << *path << endl;
+
+	for (const FString& IgnoreFolder : IgnoreFolders)
+	{
+		if (path.StartsWith(IgnoreFolder))
+			bShouldReport = false;
+	}
+
+	return bShouldReport;
+}
+
 bool UBlueprintDoxygenCommandlet::ClearGroups()
 {
 	//only in doxygen mode
@@ -248,6 +274,7 @@ bool UBlueprintDoxygenCommandlet::ClearGroups()
 	GroupList.Empty();
 
 	FString fpath = outputDir + "/" + _groups;
+	FPaths::MakePlatformFilename(fpath);
 
 	std::ofstream::openmode mode = std::ofstream::out | std::ofstream::trunc;
 	std::wofstream stream;
@@ -291,6 +318,7 @@ void UBlueprintDoxygenCommandlet::ReportGroup(FString groupName, FString groupNa
 	FString groupdata = FString::Format(*tmpl, { groupName, groupNamePretty, brief, details });
 
 	FString path = outputDir + "/" + _groups;
+	FPaths::MakePlatformFilename(path);
 	if (!OpenFile(path,true))
 	{
 		UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
@@ -341,7 +369,7 @@ void UBlueprintDoxygenCommandlet::ReportBlueprints()
 				"	per blueprint, and each graph may contain subgraphs.  Links to subgraphs can be accessed by\n"
 				"	clicking on their collapsed node or by navigating to the additional entries in the class."
 				);
-				ReportBlueprint(_tab, AssetName, LoadedBlueprint);
+				ReportBlueprint(_tab, LoadedBlueprint);
 			}
 		}
 		else
@@ -396,42 +424,58 @@ void UBlueprintDoxygenCommandlet::ReportMaterials()
 	}
 }
 
-void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, FString assetName, UBlueprint* blueprint)
+void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, UBlueprint* blueprint)
 {
-	//UE_LOG(LOG_DOT, Display, TEXT("%sParsing: %s"),	*prefix, *Blueprint->GetPathName());
-
 	const UPackage* package = blueprint->GetPackage();
-	const UClass* parent = blueprint->ParentClass;
+	FString className = GetClassName(blueprint->GeneratedClass);
+	FString path, subDir;
 
-	if (!assetName.EndsWith(TEXT("_C")))
-		assetName += "_C";
-
-	//TODO: some of these will want to be in the class definition
-//	blueprint->BlueprintDisplayName;	//DONE
-//	blueprint->BlueprintCategory;		//don't care; doesn't matter except in Editor
-//	blueprint->BlueprintNamespace;		//not useful, I think, unless someone uses it.
-//	blueprint->bDeprecate;				//DONE
-
-	FString description = "This class " + blueprint->GetDesc() + ".\n\n" + prefix + blueprint->BlueprintDescription;
-	description.TrimStartAndEndInline();
-
+	//TODO is this useful?
+	bool isDataOnlyBlueprint = FBlueprintEditorUtils::IsDataOnlyBlueprint(blueprint);
+	bool isLevelScriptBlueprint = FBlueprintEditorUtils::IsLevelScriptBlueprint(blueprint);
+	//bool isParentClassABlueprint = FBlueprintEditorUtils::IsParentClassABlueprint(blueprint);
+	
 	//each blueprint will have different graphs.  This is just to save some memory on a large build.
 	GraphDescriptions.Empty();
 
+	//each graph will make calls to nodes and variables.  Clear these before we report each blueprint.
+	GraphCalls.Empty();
+
 	if (outputMode & verbose)
-	{	UE_LOG(LOG_DOT, Display, TEXT("%sPackage: %s"), *prefix, *package->GetLoadedPath().GetLocalFullPath());
+	{	
+		const UClass* parent = blueprint->ParentClass;
+		FString description = "This class " + blueprint->GetDesc() + ".\n\n" + prefix + blueprint->BlueprintDescription;
+		description = description.TrimStartAndEnd();
+
+		UE_LOG(LOG_DOT, Display, TEXT("%sParsing: %s"),	*prefix, *blueprint->GetPathName());
+		UE_LOG(LOG_DOT, Display, TEXT("%sPackage: %s"), *prefix, *package->GetLoadedPath().GetLocalFullPath());
 		UE_LOG(LOG_DOT, Display, TEXT("%sName: %s"), *prefix, *package->GetName());
-		UE_LOG(LOG_DOT, Display, TEXT("%sExtends: %s"), *prefix, *parent->GetName());
+		UE_LOG(LOG_DOT, Display, TEXT("%sExtends: %s"), *prefix, *(parent->GetPrefixCPP()+parent->GetName()));
 		UE_LOG(LOG_DOT, Display, TEXT("%sDescription: %s"), *prefix, *(description.Replace(TEXT("\\n"),TEXT(" || "))));
 	}
 
 	if (outputMode & doxygen)
 	if (outputDir != "-")
 	{
-		//TODO: make/replicate the path to this file under the outputDir, rather than a flat folder.
+		IPlatformFile& platformFile = FPlatformFileManager::Get().GetPlatformFile();
+		subDir = package->GetName();			//get the full UDF path
+		subDir = FPaths::GetPath(subDir);		//chop the "file" entry off
+		currentDir = outputDir + "/" + subDir;
+		FPaths::NormalizeDirectoryName(currentDir);
 
-		//FString path = outputDir + FGenericPlatformMisc::GetDefaultPathSeparator() + assetName + ".cpp";
-		FString path = outputDir + "/" + assetName + ".h";
+		// Directory Exists?
+		//FPaths::DirectoryExists(dir);
+		if (!platformFile.DirectoryExists(*currentDir))
+		{
+			if (!platformFile.CreateDirectoryTree(*currentDir))
+			{
+				UE_LOG(LOG_DOT, Error, TEXT("Could not create folder: %s"),*currentDir);
+				return;
+			}
+		}
+
+		path = currentDir + "/" + className + ".h";
+		FPaths::MakePlatformFilename(path);				//clean slashes
 		if (!OpenFile(path))
 		{
 			UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
@@ -439,45 +483,56 @@ void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, FString assetN
 		}
 	}
 
-	//TODO is this useful?
-	bool isDataOnlyBlueprint = FBlueprintEditorUtils::IsDataOnlyBlueprint(blueprint);
-	bool isLevelScriptBlueprint = FBlueprintEditorUtils::IsLevelScriptBlueprint(blueprint);
-	bool isParentClassABlueprint = FBlueprintEditorUtils::IsParentClassABlueprint(blueprint);
-
 	TArray<UEdGraph*> graphs;
 	blueprint->GetAllGraphs(graphs);
 
 	if (outputMode & verbose)
-		UE_LOG(LOG_DOT, Display, TEXT("%sFound %d graph%s..."), *prefix, graphs.Num(), graphs.Num() > 1 ? "s" : "");
+	{	UE_LOG(LOG_DOT, Display, TEXT("%sFound %d graph%s..."), *prefix, graphs.Num(), graphs.Num() > 1 ? "s" : "");	}
 
 	if (outputMode & doxygen)
 	{
-		writeBlueprintHeader(blueprint, "blueprints", "Blueprint", assetName, package->GetName(), description, parent->GetName(), graphs.Num());
+		writeBlueprintHeader(blueprint, "blueprints", "Blueprint", package->GetName(), graphs.Num());
 		writeAssetMembers(blueprint, "Blueprint");
 
 		if (graphs.Num())
-		{
-			*out << "	/**" << endl;
-			*out << "	\\name Blueprint Graphs" << endl;
-			*out << "	*/" << endl;
-			*out << "	///@{" << endl;
+		{	
+//			*out << "	/**" << endl;
+//			*out << "	\\name Blueprint Graphs" << endl;
+//			//*out << "	\\privatesection" << endl;
+//			*out << "	*/" << endl;
+//			*out << "	///@{" << endl;
 		}
 	}
 
 	for (UEdGraph* g : graphs)
-		ReportGraph(g,prefix);
+		ReportGraph(prefix, g);
 
 	if (outputMode & doxygen)
+	if (outputDir != "-")
 	{
 		if (graphs.Num())
 		{
-			*out << "	///@}" << endl;
+//			*out << "	///@}" << endl;
 		}
 
 		writeAssetFooter();
-	}
 
-	CloseFile();				//will close if open, or do nothing.
+		CloseFile();		//close .h file
+
+		//TODO: make/replicate the path to this file under the outputDir, rather than a flat folder.
+
+		path = currentDir + "/" + className + ".cpp";
+		FPaths::MakePlatformFilename(path);				//clean slashes
+		if (!OpenFile(path))
+		{
+			UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
+			return;
+		}
+
+		writeAssetCalls();
+
+		CloseFile();		//close .cpp file
+	}
 }
 
 void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetName, UMaterial* material)
@@ -498,6 +553,7 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 
 	FString description = material->GetDesc();						// will probably be basically empty or useless
 	description += "\n" + material->GetDetailedInfo();
+	description = description.Replace(TEXT("\r"), TEXT(""));
 	description.TrimStartAndEndInline();
 
 	//TODO:
@@ -581,7 +637,7 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 	}
 
 	for (UEdGraph* g : graphs)
-		ReportGraph(g, prefix);
+		ReportGraph(prefix, g);
 
 	if (outputMode & doxygen)
 	{
@@ -605,7 +661,7 @@ void UBlueprintDoxygenCommandlet::addAllGraphs(TArray<UEdGraph*>& container, TAr
 	}
 }
 
-void UBlueprintDoxygenCommandlet::ReportGraph(UEdGraph* g, FString prefix)
+void UBlueprintDoxygenCommandlet::ReportGraph(FString prefix, UEdGraph* g)
 {
 	PinConnections.Empty();		//clear out all connections for each new graph
 
@@ -633,7 +689,7 @@ void UBlueprintDoxygenCommandlet::ReportGraph(UEdGraph* g, FString prefix)
 		writeGraphHeader(prefix, g, "Blueprint");
 
 	for (UEdGraphNode* n : g->Nodes)
-		ReportNode(n, prefix + _tab);
+		ReportNode(prefix + _tab, n);
 
 	if (outputMode & doxygen)
 	{	writeGraphConnections(prefix);
@@ -643,7 +699,7 @@ void UBlueprintDoxygenCommandlet::ReportGraph(UEdGraph* g, FString prefix)
 	TotalGraphsProcessed++;
 }
 
-void UBlueprintDoxygenCommandlet::ReportNode(UEdGraphNode* n, FString prefix)
+void UBlueprintDoxygenCommandlet::ReportNode(FString prefix, UEdGraphNode* n)
 {
 	//FString type = n->GetSchema
 	FString type = n->GetClass()->GetFName().ToString();
@@ -674,6 +730,7 @@ void UBlueprintDoxygenCommandlet::ReportNode(UEdGraphNode* n, FString prefix)
 
 		FString title = n->GetNodeTitle(ENodeTitleType::FullTitle).ToString();
 		//FString title = n->GetNodeTitle(ENodeTitleType::ListView).ToString();
+		title = title.Replace(TEXT("\r"), TEXT(""));
 		title = title.Replace(TEXT("\n"), TEXT(" || "));
 
 		//UE_LOG(LOG_DOT, Display, TEXT("%s%s (%s)"), *prefix, *nn, *ng);
@@ -685,10 +742,9 @@ void UBlueprintDoxygenCommandlet::ReportNode(UEdGraphNode* n, FString prefix)
 		UE_LOG(LOG_DOT, Display, TEXT("%ssize: [%d,%d]"), *prefix2, n->NodeWidth, n->NodeHeight);
 		UE_LOG(LOG_DOT, Display, TEXT("%scolor: %s"), *prefix2, *n->GetNodeBodyTintColor().ToString());
 
-		//FString description = n->GetDetailedInfo();
-		//UE_LOG(LOG_DOT, Display, TEXT("%sdetail: %s"), *prefix2, *description);
-
-		FString tt = n->GetTooltipText().ToString().Replace(TEXT("\n"), TEXT(" || "));
+		FString tt = n->GetTooltipText().ToString();
+		tt = tt.Replace(TEXT("\r"), TEXT(""));
+		tt = tt.Replace(TEXT("\n"), TEXT(" || "));
 		tt.LeftInline(50);		//trim while debugging...
 		UE_LOG(LOG_DOT, Display, TEXT("%stooltip: %s"), *prefix2, *tt);
 
@@ -699,7 +755,9 @@ void UBlueprintDoxygenCommandlet::ReportNode(UEdGraphNode* n, FString prefix)
 
 		if (n->bCommentBubbleVisible)
 		{
-			FString c = (n->NodeComment).Replace(TEXT("\n"), TEXT(" || "));// '\n', '|');
+			FString c = n->NodeComment;
+			c = c.Replace(TEXT("\r"), TEXT(""));
+			c = c.Replace(TEXT("\n"), TEXT(" || "));
 			UE_LOG(LOG_DOT, Display, TEXT("%scomment: %s"), *prefix2, *c);
 			UE_LOG(LOG_DOT, Display, TEXT("%scomment color: %s"), *prefix2, *n->GetNodeCommentColor().ToString());
 		}
@@ -716,7 +774,7 @@ void UBlueprintDoxygenCommandlet::ReportNode(UEdGraphNode* n, FString prefix)
 
 			for (UEdGraphPin* p : pins)
 			{
-				ReportPin(p, prefix2 + _tab);
+				ReportPin(prefix2 + _tab, p);
 
 				//if (n->CanSplitPin(p))
 				//	ReportSplittablePin(p, prefix2 + _tab);
@@ -728,7 +786,7 @@ void UBlueprintDoxygenCommandlet::ReportNode(UEdGraphNode* n, FString prefix)
 		writeNodeBody(prefix, n);
 }
 
-void UBlueprintDoxygenCommandlet::ReportPin(UEdGraphPin* p, FString prefix)
+void UBlueprintDoxygenCommandlet::ReportPin(FString prefix, UEdGraphPin* p)
 {
 	//don't show hidden pins
 	if (!PinShouldBeVisible(p))
@@ -736,7 +794,7 @@ void UBlueprintDoxygenCommandlet::ReportPin(UEdGraphPin* p, FString prefix)
 
 	FString flabel = GetPinLabel(p);
 	FString type = GetPinType(p);
-	FString tooltip = GetPinTooltip(p).Replace(TEXT("\n"), TEXT(" || "));
+	FString tooltip = GetPinTooltip(p);
 	FString dir = (p->Direction == EEdGraphPinDirection::EGPD_Input) ? TEXT("<===") : TEXT("===>");
 	//FString pid = p->PinId.ToString();
 
@@ -782,6 +840,8 @@ void UBlueprintDoxygenCommandlet::ReportPin(UEdGraphPin* p, FString prefix)
 	}
 }
 
+/*
+//TODO: delete this
 void UBlueprintDoxygenCommandlet::ReportSplittablePin(UEdGraphPin* p, FString prefix)
 {
 	//don't show hidden pins
@@ -790,7 +850,7 @@ void UBlueprintDoxygenCommandlet::ReportSplittablePin(UEdGraphPin* p, FString pr
 
 	FString flabel = GetPinLabel(p);
 	FString type = GetPinType(p);
-	FString tooltip = GetPinTooltip(p).Replace(TEXT("\n"), TEXT(" || "));
+	FString tooltip = GetPinTooltip(p);
 	FString dir = (p->Direction == EEdGraphPinDirection::EGPD_Input) ? TEXT("<===") : TEXT("===>");
 	//FString pid = p->PinId.ToString();
 
@@ -809,6 +869,7 @@ void UBlueprintDoxygenCommandlet::ReportSplittablePin(UEdGraphPin* p, FString pr
 		);
 	}
 }
+*/
 
 bool UBlueprintDoxygenCommandlet::OpenFile(FString fpath, bool append)
 {
@@ -849,6 +910,23 @@ bool UBlueprintDoxygenCommandlet::CloseFile()
 	}
 
 	return false;
+}
+
+FString UBlueprintDoxygenCommandlet::GetTrimmedConfigFilePath(FString path)
+{
+	//TODO: chop the head of this path off to be proper
+	FString confdir = FPaths::ProjectConfigDir();
+
+	FString trimmed = path.LeftChop(confdir.Len());
+
+	wcout << "TRIMMED: " << *trimmed << " || " << *confdir << " || " << *path << endl;
+
+	trimmed = path;
+	trimmed.RemoveFromStart(confdir);
+
+	wcout << "TRIMMED: " << *trimmed << " || " << *confdir << " || " << *path << endl;
+
+	return path;
 }
 
 // straight up copied from SGraphNode.cpp
@@ -915,27 +993,10 @@ FString UBlueprintDoxygenCommandlet::GetPinTooltip(UEdGraphPin* p)
 	FString hover;
 	n->GetPinHoverText(*p, hover);
 	hover = hover.TrimStartAndEnd();
+	hover = hover.Replace(TEXT("\r"), TEXT(""));
 	hover = hover.Replace(TEXT("\n"), TEXT("&#013;"));
 	hover = hover.Replace(TEXT("\\"), TEXT("\\\\"));
 	return hover;
-
-/*
-	//TODO: delete this?
-	FString tt = FString::Printf(
-		TEXT("%s\n%s\n\n%s"),
-		*GetPinLabel(p),
-		*GetPinType(p,true),
-		*p->PinToolTip		//TODO: for some reason always seems to be empty!
-	);
-
-	tt = tt.TrimStartAndEnd();
-	//tt = tt.Replace(TEXT("\n"), TEXT("<BR/>"));
-	//tt = tt.Replace(TEXT("\n"), TEXT("\\n"));			//this tooltip is always in html context
-	//tt = tt.Replace(TEXT("\n"), TEXT("&#10;"));
-	tt = tt.Replace(TEXT("\n"), TEXT("&#013;"));
-
-	return tt;
-*/
 }
 
 FString UBlueprintDoxygenCommandlet::GetPinType(UEdGraphPin* pin, bool useSchema)
@@ -993,6 +1054,25 @@ FString UBlueprintDoxygenCommandlet::GetPinPort(UEdGraphPin* p)
 FString UBlueprintDoxygenCommandlet::GetPinDefaultValue(UEdGraphPin* pin)
 {
 	FString v = pin->DefaultValue;
+
+	//TODO: get proper default values!
+
+	//FEdGraphPinType pt = pin->PinType;
+	//FEdGraphPinType::StaticStruct;
+
+	/*
+	if (pin->DefaultObject)
+	{
+		FJsonSerializableKeyValueMap vmap;
+		pin->DefaultObject->GetNativePropertyValues(vmap);
+
+		wcout << "def: " << *GetPinLabel(pin) << endl;
+		for (TTuple<FString, FString> vv : vmap)
+		{
+			wcout << "key: " << *vv.Key << " || " << *vv.Value << endl;
+		}
+	}
+	*/
 
 	//output is always hidden
 	if (pin->Direction == EEdGraphPinDirection::EGPD_Output)
@@ -1069,6 +1149,7 @@ FString UBlueprintDoxygenCommandlet::GetPinDefaultValue(UEdGraphPin* pin)
 
 	//default output
 	v = v.TrimStartAndEnd();
+	v = v.Replace(TEXT("\r"), TEXT(""));
 	v = v.Replace(TEXT("\n"), TEXT("&#013;"));
 	if (v.IsEmpty())
 		return "";		//presumably a label or icon exists, so empty is ok.
@@ -1216,7 +1297,7 @@ FString UBlueprintDoxygenCommandlet::createColorString(FLinearColor color, float
 	return "#"+rgb.ToFColor(true).ToHex();
 }
 
-FString UBlueprintDoxygenCommandlet::createVariableName(FString name, bool enforceUnique)
+FString UBlueprintDoxygenCommandlet::createVariableName(FString name, bool forceUnique)
 {
 	std::string g(TCHAR_TO_UTF8(*name));
 
@@ -1226,7 +1307,7 @@ FString UBlueprintDoxygenCommandlet::createVariableName(FString name, bool enfor
 
 	FString variableName(g.c_str());
 
-	if (enforceUnique)
+	if (forceUnique)
 	if (ObjectNames.Contains(variableName))
 	{
 		int i = 0;
@@ -1489,20 +1570,21 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 	UBlueprint *blueprint,
 	FString group,
 	FString qualifier,
-	FString className,
 	FString packageName,
-	FString packageDescription,
-	FString parentClass,
 	int graphCount
 )
 {
+	FString className = GetClassName(blueprint->GeneratedClass);
+	FString parentClass = GetClassName(blueprint->ParentClass);
+	
 	FString imagetag = "";
 
 	if (outputDir != "-")
 	{
 		//FGenericPlatformMisc::GetDefaultPathSeparator()
 		FString pngName = className + ".png";
-		FString pngPath = outputDir + "\\" + pngName;
+		FString pngPath = currentDir + "\\" + pngName;
+		FPaths::MakePlatformFilename(pngPath);
 		if (!CreateThumbnailFile(blueprint, pngPath))
 		{
 			UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
@@ -1531,6 +1613,16 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 	FString sDeprecated = "This blueprint will be removed in future versions.";
 	//*object->GetMetaData("DeprecationMessage")
 
+	//The (default) config file where public values can be saved/referenced.
+	FString config = GetTrimmedConfigFilePath(blueprint->GetDefaultConfigFilename());
+
+	FString description;
+	//description += "	This class " + blueprint->GetDesc() + ".\n";
+	//description += "\n";
+	description += blueprint->BlueprintDescription;
+	description = description.TrimStartAndEnd();
+	description = description.Replace(TEXT("\n"), TEXT("\n	"));
+
 	*out << "/**" << endl;
 	//*out << "	\\class " << *className << endl;
 	if (!qualifier.IsEmpty())
@@ -1538,17 +1630,22 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 	*out << "	\\ingroup " << *group << endl;
 	if (isDeprecated)
 		*out << "	\\deprecated " << *sDeprecated << endl;
+
 	//*out << "	\\brief UDF Path: <b>" << *packageName << "</b> "<< endl;
 	*out << "	\\brief A blueprint class with " << graphCount << " graphs." << endl;
+	
 	if (!imagetag.IsEmpty())
 		*out << "	" << *imagetag << endl;
+
 	*out << "	UDF Path: <b>" << *packageNameBreaks << "</b>" << endl;
+	*out << "	<br/>Config: <b>" << *config << "</b>" << endl;
 	if (!displayName.IsEmpty())
 		*out << "	<br/>Display Name: <b>" << *displayName << "</b>" << endl;
-	*out << endl;
-	//*out << "	Contains " << graphCount << " graphs and " << *packageDescription << endl;
-	*out << "	" << *packageDescription << endl;
+	*out << "	" << endl;
+	*out << "	" << *description << endl;
+
 	*out << "	<div style='clear:both;'/>" << endl;
+
 	*out << "	\\headerfile " << *className << ".h \"" << *packageName << "\"" << endl;
 	*out << "*/" << endl;
 	*out << "class " << *className << " : " << *parentClass << endl;
@@ -1572,7 +1669,8 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	{
 		//FGenericPlatformMisc::GetDefaultPathSeparator()
 		FString pngName = className + ".png";
-		FString pngPath = outputDir + "\\" + pngName;
+		FString pngPath = currentDir + "\\" + pngName;
+		FPaths::MakePlatformFilename(pngPath);
 		if (!CreateThumbnailFile(material, pngPath))
 		{
 			UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
@@ -1633,6 +1731,10 @@ FString UBlueprintDoxygenCommandlet::getCppType(FProperty *prop)
 	if (containers.Contains(ctype))
 		type = FString::Printf(TEXT("%s<%s>"), *ctype, *extype);
 
+	//TODO: macro type!
+
+	//TODO: FUNCTION type!
+
 	return type;
 }
 
@@ -1670,17 +1772,17 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 	}
 	*/
 
+	wcout << "TODO: add other vars.  They're not as important and make the documentation messy." << endl;
 	/*
-	//TODO: add other vars?  They're not as important and make the documentation messy
-	//TSet<FName> variables;
-	//FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, false);
+	TSet<FName> variables;
+	FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, false);
 	//FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, true);
 	TArray<FName> nonPrivateVars;
 	FBPVariableDescription *vd = NULL;
 	for (FName n : variables)
 	{
 		nonPrivateVars.Add(n);
-		//wcout << *n.ToString() << endl;
+		wcout << *n.ToString() << endl;
 	}
 	*/
 
@@ -1688,13 +1790,11 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 	// private/public/protected			[x] not sure it's correct
 	// type								[x]
 	// name								[x]
-	// default value (if not empty)		[/] TODO: need compound object stuff
+	// default value (if not empty)		[/] TODO: need compound/complex/function object stuff
 	// detail/description				[x] GetToolTipText() or friendlyName
 	// category							[x] sort by this
 	// replication						[x] there are more details in ELifetimeCondition
-	// deprecated						[/] TODO: we don't have a deprecation message.
-
-	TArray<FBPVariableDescription> vars = blueprint->NewVariables;
+	// deprecated						[x] we use default a deprecation message sometimes
 
 	TMap<FString, TMap<FString, TArray<FString> > > members;	//yeah man!
 
@@ -1702,6 +1802,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 	members.Add("protected", TMap<FString, TArray<FString> >());
 	members.Add("private", TMap<FString, TArray<FString> >());
 
+	TArray<FBPVariableDescription> vars = blueprint->NewVariables;
 	for (FBPVariableDescription v : vars)
 	{
 		FProperty* fp = blueprint->GeneratedClass->FindPropertyByName(v.VarName);
@@ -1719,7 +1820,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 		//wcout << "========" << endl;
 
 		//FString varName = createVariableName(v.VarName.ToString(),false);
-		FString varName = createVariableName(fp->GetNameCPP(), false);
+		FString variableName = createVariableName(fp->GetNameCPP(), false);
 		FString friendlyName = v.FriendlyName;
 		FString category = v.Category.ToString();
 		FString type = getCppType(fp);
@@ -1738,8 +1839,8 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 		description = description.Replace(TEXT("\\"), TEXT("\\\\"));
 		//wcout << "DESCRIPTION: " << *description << endl;
 
-		bool isPrivate = false;
-		bool isPublic = true;
+		bool isPrivate = true;
+		bool isPublic = false;
 
 		uint64 flags = v.PropertyFlags;
 		bool isReadonly = flags & EPropertyFlags::CPF_BlueprintReadOnly;
@@ -1762,10 +1863,12 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 		isPublic = isInstanceEditable;				//this is probably incorrect or incomplete
 		isPrivate = isReadonly;						//this is probably incorrect or incomplete
 
+		//isPrivate = flags & EPropertyFlags::CPF_NativeAccessSpecifierPrivate;
+
 		FString e = FString::Printf(TEXT("%s%s %s = \"%s\";\t//!< %s"),
 			isConst ? "const " : "",
 			*type,
-			*varName,
+			*variableName,
 			*initializer,
 			*description
 		);
@@ -1816,6 +1919,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 
 	if (members["protected"].Num())
 	{
+		*out << endl;
 		*out << "protected:" << endl;
 //		*out << "	/**" << endl;
 //		*out << "		\\name Protected " << *what << " Variables" << endl;
@@ -1843,6 +1947,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 	}
 
 	//always report private... that's where graphs go.
+	*out << endl;
 	*out << "private:" << endl;
 //	*out << "	/**" << endl;
 //	*out << "		\\name Private " << *what << " Variables" << endl;
@@ -1872,12 +1977,46 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 void UBlueprintDoxygenCommandlet::writeAssetFooter()
 {
 	*out << "};" << endl;
+	*out << endl;
+}
+
+void UBlueprintDoxygenCommandlet::writeAssetCalls()
+{
+	*out << R"PixoVR(
+/*
+	This is fake C++ that doxygen will parse for call graph entries.
+
+	In this pseudo-C++, everything is a function and gets called
+	if it's mentioned in a node graph.  Doxygen parses it anyway!
+
+	We use the URLs of the nodes to make this list.
+*/
+)PixoVR" << endl;
+
+	for (const TPair<FString, TArray<FString> >& e : GraphCalls)
+	{
+		*out << *e.Key << endl;
+		*out << "{" << endl;
+		TArray<FString> list = e.Value;
+		list.HeapSort();
+		for (FString l : list)
+		{
+			if (!l.IsEmpty())
+				*out << "	" << *l << "();" << endl;
+		}
+		*out << "}" << endl;
+		*out << endl;
+	}
 }
 
 FString UBlueprintDoxygenCommandlet::prepTemplateString(FString prefix, vmap style, FString string)
 {
 	FString h = prefix + string;
 
+	for (auto& e : style)
+		h = h.Replace(*e.Key, *e.Value);
+
+	//do it twice, in case a value also has variables in it.
 	for (auto& e : style)
 		h = h.Replace(*e.Key, *e.Value);
 
@@ -1894,6 +2033,10 @@ FString UBlueprintDoxygenCommandlet::prepTemplateString(FString prefix, vmap sty
 	for (FString s : m)
 		h = h.Replace(*s, TEXT(""));
 
+	//clean up any empty <i> tags from replacement
+	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));				//for nodes missing a second line
+
+	h = h.Replace(TEXT("\r"), *(TEXT("") + prefix));
 	h = h.Replace(TEXT("\n"), *(TEXT("\n") + prefix));
 	//h = h.Replace(TEXT("\\"), *(TEXT("\\\\") + prefix));
 
@@ -1902,9 +2045,7 @@ FString UBlueprintDoxygenCommandlet::prepTemplateString(FString prefix, vmap sty
 
 void UBlueprintDoxygenCommandlet::writeGraphHeader(FString prefix, UEdGraph* graph, FString qualifier)
 {
-	FString graphName;
-	graph->GetName(graphName);
-
+	FString graphName = graph->GetName();
 	FString graphNameVariable = createVariableName(graphName, false);
 	FString graphNameHuman = FName::NameToDisplayString(graphName, false);
 
@@ -1918,6 +2059,7 @@ void UBlueprintDoxygenCommandlet::writeGraphHeader(FString prefix, UEdGraph* gra
 
 	*out << *prefix << "/**" << endl;
 	*out << *prefix << *_tab << "\\qualifier " << *qualifier << endl;
+	//*out << *prefix << *_tab << "\\private" << endl;
 	if (!brief.IsEmpty())
 		*out << *prefix << *_tab << "\\brief " << *brief << endl;
 	if (!details.IsEmpty())
@@ -1946,6 +2088,8 @@ edge [
 	arrowhead="dot"
 	arrowtail="dot"
 	arrowsize="0.5"
+	headclip="false"
+	tailclip="false"
 	dir="none"
 ];
 node [
@@ -1962,20 +2106,26 @@ node [
 
 void UBlueprintDoxygenCommandlet::writeGraphFooter(FString prefix, UEdGraph *graph)
 {
-	FString graphName;
-	graph->GetName(graphName);
-
+	FString graphName = graph->GetName();
 	FString graphNameVariable = createVariableName(graphName, false);
 	FString graphNameHuman = FName::NameToDisplayString(graphName, false);
 
-	//FString parent = g->GetClass()->GetSuperClass()->GetFName().ToString();
-	FString parent = graph->GetClass()->GetFName().ToString();
+	//FString type = g->GetClass()->GetSuperClass()->GetFName().ToString();
+	//FString type = GetClassName(graph->GetOuter()->GetClass());
+	FString type = GetClassName(graph->GetClass());
 
 	*out << *prefix << *_tab << "}" << endl;
 	*out << *prefix << *_tab << "\\enddot" << endl;
 	*out << *prefix << "*/" << endl;
-	//*out << *prefix << *parent << " " << *graphNameVariable << "(" << *graphName << ");" << endl;
-	*out << *prefix << *parent << " " << *graphNameVariable << ";	//\"" << *graphNameHuman << "\"" << endl;
+
+	//bool isFunction = ??
+
+	//if (isFunction)
+	//	*out << *prefix << *type << " " << *functionName << "(" << *functionArguments << ");" << endl;
+	//else
+
+	FString cpp = GetGraphCPP(graph);
+	*out << *prefix << *cpp << ";	//\"" << *graphNameHuman << "\"" << endl;
 }
 
 void UBlueprintDoxygenCommandlet::writeGraphConnections(FString prefix)
@@ -1997,28 +2147,38 @@ TMap<FString, UBlueprintDoxygenCommandlet::NodeType> UBlueprintDoxygenCommandlet
 	{ "comment",					NodeType::comment		},
 	{	"EdGraphNode_Comment",		NodeType::comment		},
 	{ "bubble",						NodeType::bubble		},
-	{ "path",						NodeType::path			},	//no instances of this yet
+	{ "path",						NodeType::path			},	//TODO: no instances of this yet
 	{ "route",						NodeType::route			},
 	{	"K2Node_Knot",				NodeType::route			},
 	{ "variable",					NodeType::variable		},
 	{	"K2Node_VariableGet",		NodeType::variable		},
+	{ "variableset",				NodeType::variableset	},
+	{	"K2Node_VariableSet",		NodeType::variableset	},
 	{ "compact",					NodeType::compact		},
 	{	"K2Node_PromotableOperator",NodeType::compact		},
 	{ "composite",					NodeType::composite		},
 	{	"K2Node_Composite",			NodeType::composite		},
-	{ "function",					NodeType::function		},	//no instances of this...
+	{ "function",					NodeType::function		},
+	{	"K2Node_CallFunction",		NodeType::function		},
+	{	"K2Node_CallParentFunction",NodeType::function		},	//NO: FunctionEntry
 	{ "macro",						NodeType::macro			},	//dimmer header, but normal node
-	{	"K2Node_MacroInstance",		NodeType::macro			},	//
+	{	"K2Node_MacroInstance",		NodeType::macro			},
 	{ "tunnel",						NodeType::tunnel		},
 	{	"K2Node_Tunnel",			NodeType::tunnel		},
 	{ "event",						NodeType::event			},
 	{	"K2Node_Event",				NodeType::event			},
 	{	"K2Node_CustomEvent",		NodeType::event			},
-	{	"K2Node_CallParentFunction", NodeType::event		},
+	{ "spawn",						NodeType::spawn			},
+	{	"K2Node_SpawnActor",		NodeType::spawn			},
+	{	"K2Node_SpawnActorFromClass",NodeType::spawn		},
+	{	"K2Node_GenericCreateObject",NodeType::spawn		},
+	{	"K2Node_ConstructObjectFromClass",NodeType::spawn	},
+	{	"K2Node_DynamicCast",		NodeType::spawn			},
+	{	"K2Node_ClassDynamicCast",	NodeType::spawn			},
 	{ "MAX",						NodeType::MAX			}
 };
 
-FString UBlueprintDoxygenCommandlet::getNodeTemplate(NodeType type)
+FString UBlueprintDoxygenCommandlet::getNodeTemplate(NodeType type, bool hasDelegate)
 {
 	//magic node types:
 //	(all types, except those noted below) // regular node
@@ -2041,7 +2201,7 @@ _NODENAME_ [
 	pos="_POS_"
 	tooltip="_TOOLTIP_"
 	class="_CLASS_"
-	url="_URL_"
+	URL="_URL_"
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
@@ -2064,6 +2224,7 @@ _NODENAME_ [
 	pos="_POS_"
 	tooltip="_TOOLTIP_"
 	class="_CLASS_"
+	URL="_URL_"
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
@@ -2081,20 +2242,24 @@ _PORTROWS_
 
 	case NodeType::event:		//event
 	case NodeType::macro:		//macro		//dimmer header
-		t = R"PixoVR(
+	case NodeType::node:		//plain node
+
+		if (hasDelegate)
+		{
+			t = R"PixoVR(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
 	tooltip="_TOOLTIP_"
 	class="_CLASS_"
-	url="_URL_"
+	URL="_URL_"
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
 				<tr>
-					<td colspan="3" align="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>&nbsp;_NODEICON_ _NODETITLE__HEIGHTSPACER_</b></td>
-					<td colspan="1" align="right" width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="delegate">_HEIGHTSPACER__NODEDELEGATE_</td>
+					<td colspan="3" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
+					<td colspan="1" align="right" balign="right" width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="delegate">_HEIGHTSPACER__NODEDELEGATE_</td>
 				</tr>
 				<hr/>
 _PORTROWS_
@@ -2102,26 +2267,53 @@ _PORTROWS_
 		</td></tr></table>
 	>
 ];)PixoVR";
+		}
+		else
+		{
+			t = R"PixoVR(
+_NODENAME_ [
+	layer="nodes"
+	pos="_POS_"
+	tooltip="_TOOLTIP_"
+	class="_CLASS_"
+	URL="_URL_"
+
+	label=<
+		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
+			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
+				<tr>
+					<td colspan="4" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b></td>
+				</tr>
+				<hr/>
+_PORTROWS_
+			</table>
+		</td></tr></table>
+	>
+];)PixoVR";
+		}
 
 		break;
 
+	case NodeType::spawn:
 	case NodeType::function:
 	case NodeType::tunnel:
-	case NodeType::node:		//plain node
-		t = R"PixoVR(
+
+		if (hasDelegate)
+		{
+			t = R"PixoVR(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
 	tooltip="_TOOLTIP_"
 	class="_CLASS_"
-	url="_URL_"
+	URL="_URL_"
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
 				<tr>
-					<td colspan="3" align="left"  width="1" height="0" bgcolor="_HEADERCOLOR_" port="icon"    ><b>&nbsp;_NODEICON_&nbsp;_NODETITLE__HEIGHTSPACER_</b></td>
-					<td colspan="1" align="right" width="1" height="0" bgcolor="_HEADERCOLOR_" port="delegate">_HEIGHTSPACER__NODEDELEGATE_</td>
+					<td colspan="3" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLOR_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
+					<td colspan="1" align="right" balign="right" width="1" height="0" bgcolor="_HEADERCOLOR_" port="delegate">_HEIGHTSPACER__NODEDELEGATE_</td>
 				</tr>
 				<hr/>
 _PORTROWS_
@@ -2129,6 +2321,30 @@ _PORTROWS_
 		</td></tr></table>
 	>
 ];)PixoVR";
+		}
+		else
+		{
+			t = R"PixoVR(
+_NODENAME_ [
+	layer="nodes"
+	pos="_POS_"
+	tooltip="_TOOLTIP_"
+	class="_CLASS_"
+	URL="_URL_"
+
+	label=<
+		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
+			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
+				<tr>
+					<td colspan="4" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLOR_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
+				</tr>
+				<hr/>
+_PORTROWS_
+			</table>
+		</td></tr></table>
+	>
+];)PixoVR";
+		}
 
 		break;
 
@@ -2164,11 +2380,34 @@ _NODENAME_ [
 	pos="_POS_"
 	tooltip="_TOOLTIP_"
 	class="_CLASS_"
-	url="_URL_"
+	URL="_URL_"
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
-			<table style="rounded" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
+			<table align="right" style="rounded" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
+_PORTROWS_
+			</table>
+		</td></tr></table>
+	>
+];)PixoVR";
+
+		break;
+
+	case NodeType::variableset:		//variableset
+		t = R"PixoVR(
+_NODENAME_ [
+	layer="nodes"
+	pos="_POS_"
+	tooltip="_TOOLTIP_"
+	class="_CLASS_"
+	URL="_URL_"
+
+	label=<
+		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
+			<table style="rounded" align="left" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_COMPOSITEPADDING_">
+				<tr>
+					<td align="center" balign="center" fixedsize="true" width="_COMPACTWIDTH_" height="1" colspan="4"><font color="_COMPACTCOLOR_" point-size="_COMPACTSIZE_"><b>SET</b></font></td>
+				</tr>
 _PORTROWS_
 			</table>
 		</td></tr></table>
@@ -2233,13 +2472,13 @@ _PORTROWS_
 }
 
 TMap<FString, FString> UBlueprintDoxygenCommandlet::NodeIcons = {
-	{ "default",	"&#10765;"	},		//function symbol
-	{ "event",		"&#10070;"	},		//diamond		&#10070; &#9672; &#11030; &#11031;
-	{ "container",	"&#8651;"	},		//arrows?
-	{ "switch",		"&#8997;"	},		//switch
-	{ "path",		"&#8916;"	},		//fork in the road
-	{ "io",			"&#10140;"	},		//input/output circle arrow		&#8658; &#128468;
-	{ "spawn",		"*"	}				//need something to indicate create		//TODO this is unused and needs to be selected.
+	{ "default",	"&#10765;"	},		// function symbol
+	{ "event",		"&#10070;"	},		// diamond		&#10070; &#9672; &#11030; &#11031;
+	{ "container",	"&#8651;"	},		// arrows?
+	{ "switch",		"&#8997;"	},		// switch
+	{ "path",		"&#8916;"	},		// fork in the road
+	{ "io",			"&#10140;"	},		// input/output circle arrow		&#8658; &#128468;
+	{ "spawn",		"&#10038;"	}		// star			&#9733; &#10038; //https://www.amp-what.com/unicode/search/star
 };
 
 TMap<FString, TPair<FString,FString> > UBlueprintDoxygenCommandlet::PinIcons = {
@@ -2247,10 +2486,10 @@ TMap<FString, TPair<FString,FString> > UBlueprintDoxygenCommandlet::PinIcons = {
 	{ "data",		{ "&#9678;", "&#9673;" } },		// open/closed circle
 	{ "exec",		{ "&#9655;&#65038;", "&#9654;&#65038;" } },					// open/closed right arrow. Uses &#65038; after to request the non-emoji representation.
 	{ "delegate",	{ "&#9634;", "&#9635;" } },		// open/closed box
-	{ "addpin",		{ "&#9678;", "&#9678;" } },		// open/closed circle		//TODO
+	{ "addpin",		{"&#10753;", "&#10753;"} },		// open/closed circle		//TODO &#8853;	//https://www.isthisthingon.org/unicode/index.phtml?page=02&subpage=A
 	{ "container",	{ "&#9920;", "&#9923;" } },		// open/closed barrel thing
 	//{ "array",		{"&#10214;&#9678;&#10215;","&#10214;&#9673;&#10215;"}},	// open/closed square braces
-	{ "array",		{"[&#9678;]","[&#9673;]"}},		// open/closed square braces
+	{ "array",		{"[&#9678;]","[&#9673;]"}},		// open/closed square braces	&#128992; grid circle thing
 	{ "map",		{"&#10218;&#9638;&#10219;","&#10218;&#9641;&#10219;" } },	// open/closed angle bracket
 	{ "set",		{"&#10100;&#9678;&#10101;","&#10100;&#9673;&#10101;"}},		// open/closed curly braces
 	{ "skull",		{ "&#9760;", "&#9760;" } },		// skull
@@ -2311,6 +2550,9 @@ UBlueprintDoxygenCommandlet::NodeType UBlueprintDoxygenCommandlet::GetNodeType(U
 	if (n2 && n2->ShouldDrawCompact())
 			return NodeType::compact;
 
+	//if (FBlueprintEditorUtils::IsTunnelInstanceNode(node))			//is this needed?
+	//	return NodeType::tunnel;
+
 	if (type == NodeType::none)
 		if (outputMode & OutputMode::debug)
 			UE_LOG(LOG_DOT, Error, TEXT("Unknown node type: '%s'. Returning NodeType::none."), *stype);
@@ -2326,31 +2568,287 @@ FString UBlueprintDoxygenCommandlet::GetNodeTypeGroup(UBlueprintDoxygenCommandle
 FString UBlueprintDoxygenCommandlet::GetNodeTooltip(UEdGraphNode* node)
 {
 	FString tooltip = node->GetTooltipText().ToString();
+	tooltip = tooltip.Replace(TEXT("\\"), TEXT("\\\\"));
 	tooltip = tooltip.ReplaceQuotesWithEscapedQuotes();
 	tooltip = tooltip.TrimStartAndEnd();
 	//tooltip = tooltip.Replace(TEXT("\n"), TEXT("<BR/>"));
 	//tooltip = tooltip.Replace(TEXT("\n"), TEXT("\\n"));			//this tooltip is never in html context
 	//tooltip = tooltip.Replace(TEXT("\n"), TEXT("&#10;"));
+	tooltip = tooltip.Replace(TEXT("\r"), TEXT(""));
 	tooltip = tooltip.Replace(TEXT("\n"), TEXT("&#013;"));
 	//tooltip = tooltip.Replace(TEXT("\\"), TEXT("\\\\"));
 
 	return tooltip;
 }
 
-FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node)
+FString UBlueprintDoxygenCommandlet::GetPinURL(UEdGraphPin* pin)
 {
+	return "";
 
-	wcout << "TODO: URLs" << endl;
-	//bool 	FBlueprintEditorUtils::IsTunnelInstanceNode
-	//(
-	//	const UEdGraphNode * InGraphNod...
-	//)
+	//TODO: do we ever actually need a pinurl?
+	//FString url = GetNodeURL(pin->GetOwningNode(),pin->Direction);
 
-	//subgraphs
-	//inputs/outputs (tunnels)
+	//...
+
+	//return url;
+}
+
+FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinDirection direction)
+{
+	//subgraphs							X
+	//inputs/outputs (tunnels)			X
 	//spawn nodes
+	//variables							X
+	//function nodes					X
+	//macro								X
 
-	return "#";
+	NodeType type = GetNodeType(node, NodeType::node);
+	FString url = "";
+
+	UBlueprint* blueprint = FBlueprintEditorUtils::FindBlueprintForNode(node);
+	FString blueprintClassName = GetClassName(blueprint->GeneratedClass);
+	FString variableName;				// leave uninitialized
+
+	UEdGraph* originalGraph = node->GetGraph();
+	FString originalGraphName = createVariableName(originalGraph->GetName(), false);
+	FString originalBlueprintClassName = blueprintClassName;
+
+	switch (type)
+	{
+		case NodeType::composite:		// subgraph
+		case NodeType::tunnel:			// subgraph
+		{
+			UK2Node_Tunnel* tunnel = dynamic_cast<UK2Node_Tunnel*>(node);
+
+			if (!tunnel)
+			{
+				UE_LOG(LOG_DOT, Error, TEXT("Can't cast to tunnel."));
+				break;
+			}
+
+			UK2Node_Tunnel* inode = tunnel->GetInputSink();
+			UK2Node_Tunnel* onode = tunnel->GetOutputSource();
+
+			UEdGraph* graph = NULL;
+			UEdGraph* igraph = inode ? inode->GetGraph() : NULL;
+			UEdGraph* ograph = onode ? onode->GetGraph() : NULL;
+
+			switch (direction)
+			{
+			case EEdGraphPinDirection::EGPD_Input:
+				graph = igraph;
+				break;
+
+			case EEdGraphPinDirection::EGPD_Output:
+				graph = ograph;
+				break;
+
+			case EEdGraphPinDirection::EGPD_MAX:
+			default:
+				if (igraph && ograph && igraph != ograph)
+					wcerr << "Hm, input node doesn't match output node!" << endl;
+
+				graph = igraph ? igraph : ograph;	// we prioritize igraph over ograph
+				break;
+			}
+
+			if (graph)
+			{
+				blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(graph);
+
+				//if not on the no-fly list...
+				if (ShouldReportObject(blueprint))
+				{
+					blueprintClassName = GetClassName(blueprint->GeneratedClass);
+					variableName = createVariableName(graph->GetName(), false);
+				}
+			}
+		}
+		break;
+
+	case NodeType::variableset:
+	case NodeType::variable:		// local variables
+		{
+			UK2Node_Variable* variable = dynamic_cast<UK2Node_Variable*>(node);
+			//UK2Node_VariableSet
+
+			if (variable)
+			{
+				FProperty* fp = variable->GetPropertyForVariable();
+
+				UClass *blueprintClass = variable->VariableReference.GetMemberParentClass();
+				if (blueprintClass)
+				{
+					blueprintClassName = GetClassName(blueprintClass);
+				}
+				else
+				{
+					blueprint = variable->GetBlueprint();
+
+					//if not on the no-fly list...
+					if (ShouldReportObject(blueprint))
+					{	blueprintClassName = GetClassName(blueprint->GeneratedClass);
+						variableName = createVariableName(fp->GetNameCPP(), false);
+					}
+				}
+			}
+		}
+		break;
+
+	//case NodeType::cast:			// UK2Node_DynamicCast	//UK2Node_ClassDynamicCast
+	case NodeType::spawn:			// spawn TODO!  Only makes sense if the selected class/actor is in a package we're documenting.
+		{
+			/*
+			UK2Node_SpawnActor* avariable = dynamic_cast<UK2Node_SpawnActor*>(node);
+			UK2Node_ConstructObjectFromClass* cvariable = dynamic_cast<UK2Node_ConstructObjectFromClass*>(node);
+			
+			UEdGraph* graph = NULL;
+
+			//if (avariable)
+			//	graph = avariable->GetMacroGraph();
+			//	graph = avariable->graph
+			if (cvariable)
+			{
+				UClass *oclass = cvariable->GetClassToSpawn();
+				if (oclass->GetTypedOuter(UBlueprint::StaticClass()))
+
+				graph = 
+			}
+
+			if (!graph)
+			{
+				//wcout << "no graph! " << *node->GetClass()->GetFName().ToString() << endl;
+				break;
+			}
+
+			//blueprint = variable->GetBlueprint();
+			blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(graph);
+
+			//if not on the no-fly list...
+			if (ShouldReportObject(blueprint))
+			{	blueprintClassName = GetClassName(blueprint->GeneratedClass);
+				variableName = createVariableName(graph->GetName(), false);
+			}
+			*/
+		}
+		break;
+
+	case NodeType::compact:
+	case NodeType::macro:
+		{
+			UK2Node_MacroInstance* variable = dynamic_cast<UK2Node_MacroInstance*>(node);
+			UEdGraph* graph = NULL;
+
+			if (variable)
+				graph = variable->GetMacroGraph();
+
+			if (!graph)
+			{
+				//wcout << "no graph! " << *node->GetClass()->GetFName().ToString() << endl;
+				break;
+			}
+
+			//blueprint = variable->GetBlueprint();
+			blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(graph);
+
+			//if not on the no-fly list...
+			if (ShouldReportObject(blueprint))
+			{	blueprintClassName = GetClassName(blueprint->GeneratedClass);
+				variableName = createVariableName(graph->GetName(), false);
+			}
+		}
+		break;
+
+	case NodeType::function:
+		{
+			UK2Node_CallFunction* fvariable = dynamic_cast<UK2Node_CallFunction*>(node);
+			UEdGraph* graph = NULL;
+			const UEdGraphNode* evt;		//we ignore this
+
+			if (fvariable)
+				graph = fvariable->GetFunctionGraph(evt);
+
+			if (!graph)
+			{
+				//wcout << "no graph! " << *node->GetClass()->GetFName().ToString() << endl;
+				break;
+			}
+
+			//blueprint = variable->GetBlueprint();
+			blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(graph);
+
+			//if not on the no-fly list...
+			if (ShouldReportObject(blueprint))
+			{	blueprintClassName = GetClassName(blueprint->GeneratedClass);
+				variableName = createVariableName(graph->GetName(), false);
+			}
+		}
+		break;
+
+	default:
+		break;
+	}
+
+	// we don't want a node to point to its own graph entry as a url.
+	if (originalGraphName == variableName &&
+		originalBlueprintClassName == blueprintClassName)
+		return "";
+
+	FString format = "\\ref {0}::{1}";
+
+	if (!variableName.IsEmpty())
+		url = FString::Format(*format, { blueprintClassName, variableName });
+	//else
+	//	UE_LOG(LOG_DOT, Error, TEXT("No variable name present!"));
+
+	//FString nn = node->GetNodeTitle(ENodeTitleType::MenuTitle).ToString();
+	//wcout << *originalBlueprintClassName << " || " << *blueprintClassName << " || " << *originalGraphName << " || " << *variableName << " >> ";
+	//wcout << *nn << " :: " << *node->GetName() << " :: URL: " << *url << endl;
+
+	FString cpp = GetGraphCPP(originalGraph, originalBlueprintClassName);
+	if (!url.IsEmpty())
+	{
+		FString curl = blueprintClassName + "::" + variableName;
+		GraphCalls.FindOrAdd(cpp).AddUnique(curl);
+	}
+	else
+		GraphCalls.FindOrAdd(cpp).AddUnique("");
+
+	return url;
+}
+
+FString UBlueprintDoxygenCommandlet::GetGraphCPP(UEdGraph* graph, FString _namespace)
+{
+	FString graphName = graph->GetName();
+	FString graphNameVariable = createVariableName(graphName, false);
+	//FString graphNameHuman = FName::NameToDisplayString(graphName, false);
+
+	//FString type = g->GetClass()->GetSuperClass()->GetFName().ToString();
+	//FString type = GetClassName(graph->GetOuter()->GetClass());
+	FString type = GetClassName(graph->GetClass());
+	type = "void";
+
+	//TODO ... function signatures?
+	//bool isFunction = ??
+	//if (isFunction)
+	//	*out << *prefix << *type << " " << *functionName << "(" << *functionArguments << ");" << endl;
+	//else
+	//	*out ...
+
+	FString cpp;
+	
+	if (!_namespace.IsEmpty())
+		cpp = type + " " + _namespace + "::" + graphNameVariable + "()";
+	else
+		cpp = type + " " + graphNameVariable + "()";
+
+	return cpp;
+}
+
+FString UBlueprintDoxygenCommandlet::GetClassName(UClass* _class)
+{
+	FString className = _class->GetPrefixCPP() + _class->GetFName().ToString();
+	return className;
 }
 
 FString UBlueprintDoxygenCommandlet::GetNodeIcon(UEdGraphNode* node)
@@ -2375,10 +2873,14 @@ FString UBlueprintDoxygenCommandlet::GetNodeIcon(UEdGraphNode* node)
 		case NodeType::tunnel:
 			return NodeIcons["io"];			//arrows
 
+		case NodeType::spawn:
+			return NodeIcons["spawn"];		//star
+
 		//spawn
 
 		case NodeType::route:
 		case NodeType::variable:
+		case NodeType::variableset:
 		case NodeType::comment:
 		case NodeType::bubble:
 			return "";						//no icon needed
@@ -2389,15 +2891,19 @@ FString UBlueprintDoxygenCommandlet::GetNodeIcon(UEdGraphNode* node)
 	}
 }
 
-FString UBlueprintDoxygenCommandlet::GetDelegateIcon(UEdGraphNode* node)
+FString UBlueprintDoxygenCommandlet::GetDelegateIcon(UEdGraphNode* node, bool *hasDelegate)
 {
 	const TArray< UEdGraphPin* > pins = node->Pins;
 	//const TArray< UEdGraphPin* > pins = n->GetAllPins();
+
+	*hasDelegate = false;
 
 	for (UEdGraphPin* p : pins)
 	{
 		if (isDelegatePin(p))
 		{
+			*hasDelegate = true;
+
 			FString dc = GetPinColor(p);
 			if (p->HasAnyConnections())
 				return FString::Printf(TEXT("<font color=\"%s\">%s</font>"), *dc, *PinIcons["delegate"].Value);
@@ -2424,36 +2930,55 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 {
 	//both
 	FString nodeTemplate_11 = R"PixoVR(<tr>
-	<td colspan="2" align="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
-	<td colspan="2" align="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
+	<td colspan="2" align="left"  balign="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
+	<td colspan="2" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
 </tr>)PixoVR";
 
 	//left
 	FString nodeTemplate_10 = R"PixoVR(<tr>
-	<td colspan="2" align="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
+	<td colspan="2" align="left" balign="left" href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
 	<td colspan="2"></td>
 </tr>)PixoVR";
 
 	FString nodeTemplate_01 = R"PixoVR(<tr>
 	<td colspan="2"></td>
-	<td colspan="2" align="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
+	<td colspan="2" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
 </tr>)PixoVR";
 
+/*
 	FString routeTemplate2 = R"PixoVR(<tr>
 	<td port="port" href="_PINURL_" title="_NODECOMMENT_">&#11044;</td>
 </tr>)PixoVR";
+*/
+	//&reg;
+	//&#10122;
 	FString routeTemplate = R"PixoVR(<tr>
-	<td port="port" href="_PINURL_" title="_NODECOMMENT_">&reg;</td>
+	<td port="port" href="_PINURL_" title="_NODECOMMENT_">&#9899;</td>
 </tr>)PixoVR";
 
+	//min size 80
 	FString variableTemplate = R"PixoVR(<tr>
 	<td colspan="2"></td>
-	<td colspan="2" width="80" align="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
+	<td colspan="2" width="80" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
+</tr>)PixoVR";
+
+	//min size 80
+	FString variableTemplate2 = R"PixoVR(<tr>
+	<td colspan="2" width="40" align="left"  balign="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
+	<td colspan="2" width="40" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
+</tr>)PixoVR";
+
+	FString variablesetTemplate = R"PixoVR(<tr>
+	<td colspan="2" align="left"  balign="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
+	<td colspan="2" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
 </tr>)PixoVR";
 
 	bool isRoute = GetNodeType(node, NodeType::node) == NodeType::route;
 	bool isVariable = GetNodeType(node, NodeType::node) == NodeType::variable;
+	bool isVariableset = GetNodeType(node, NodeType::node) == NodeType::variableset;
 	bool isCompact = GetNodeType(node, NodeType::node) == NodeType::compact;
+	bool isConnected = false;		//changed below
+	bool otherIsRoute = false;		//updated below
 
 	FString rows;
 
@@ -2500,7 +3025,7 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 				outs.Add(p);
 	}
 
-	FString sname, sport, dname, dport, color, connection;
+	FString sname, sport, sside, dname, dport, dside, color, connection;
 	FString rowTemplate;
 	UEdGraphPin *i=NULL, *o=NULL;
 	while (ins.Num() > 0 || outs.Num() > 0)
@@ -2524,7 +3049,9 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 		if (isRoute)
 			rowTemplate = routeTemplate;
 		else if (isVariable)
-			rowTemplate = variableTemplate;
+			rowTemplate = i ? variableTemplate2 : variableTemplate;
+		else if (isVariableset)
+			rowTemplate = variablesetTemplate;
 		else if (i&&o)
 			rowTemplate = nodeTemplate_11;
 		else if (i&&!o)
@@ -2538,22 +3065,27 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 		{
 			dport = GetPinPort(i);
 			color = GetPinColor(i);
+			isConnected = i->HasAnyConnections();
 
 			pindata["_INPORT_"] = dport;
 			pindata["_INICON_"] = GetPinIcon(i);
 			pindata["_INLABEL_"] = isCompact ? "" : GetPinLabel(i);
 			pindata["_INCOLOR_"] = color;
-			pindata["_INVALUE_"] = GetPinDefaultValue(i);
+			pindata["_INVALUE_"] = isConnected ? "" : GetPinDefaultValue(i);
 			pindata["_INTOOLTIP_"] = GetPinTooltip(i);
 
 			//create connection(s)
-			i->GetOwningNode()->GetName(dname);		//the source name, from this output
+			dname = i->GetOwningNode()->GetName();		//the source name, from this output
 			for (UEdGraphPin* s : i->LinkedTo)
 			{
-				s->GetOwningNode()->GetName(sname);	//the destination node, from this output
+				otherIsRoute = GetNodeType(s->GetOwningNode(), NodeType::node) == NodeType::route;
+				sname = s->GetOwningNode()->GetName();	//the destination node, from this output
 				sport = GetPinPort(s);
 
-				connection = FString::Printf(TEXT("%s:%s:_ -- %s:%s:_"), *sname, *sport, *dname, *dport);
+				sside = otherIsRoute	? "c" : "e";
+				dside = isRoute			? "c" : "w";
+
+				connection = FString::Printf(TEXT("%s:%s:%s -- %s:%s:%s"), *sname, *sport, *sside, *dname, *dport, *dside);
 				PinConnections.Add(connection, color);
 			}
 		}
@@ -2571,22 +3103,27 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 		{
 			sport = GetPinPort(o);
 			color = GetPinColor(o);
+			isConnected = o->HasAnyConnections();
 
 			pindata["_OUTPORT_"] = sport;
 			pindata["_OUTICON_"] = GetPinIcon(o);
 			pindata["_OUTLABEL_"] = isCompact ? "" : GetPinLabel(o);
 			pindata["_OUTCOLOR_"] = color;
-			pindata["_OUTVALUE_"] = GetPinDefaultValue(o);	//ever used?
+			pindata["_OUTVALUE_"] = isConnected ? "" : GetPinDefaultValue(o);	//ever used?
 			pindata["_OUTTOOLTIP_"] = GetPinTooltip(o);
 
 			//create connection(s)
-			o->GetOwningNode()->GetName(sname);		//the source name, from this output
+			sname = o->GetOwningNode()->GetName();		//the source name, from this output
 			for (UEdGraphPin* d : o->LinkedTo)
 			{
-				d->GetOwningNode()->GetName(dname);	//the destination node, from this output
+				otherIsRoute = GetNodeType(d->GetOwningNode(), NodeType::node) == NodeType::route;
+				dname = d->GetOwningNode()->GetName();	//the destination node, from this output
 				dport = GetPinPort(d);
 
-				connection = FString::Printf(TEXT("%s:%s:_ -- %s:%s:_"), *sname, *sport, *dname, *dport);
+				sside = isRoute			? "c" : "e";
+				dside = otherIsRoute	? "c" : "w";
+
+				connection = FString::Printf(TEXT("%s:%s:%s -- %s:%s:%s"), *sname, *sport, *sside, *dname, *dport, *dside);
 				PinConnections.Add(connection, color);
 			}
 		}
@@ -2614,8 +3151,7 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 {
 	//should we be casting to UK2Node instead of using UEdGraphNode?
 
-	FString nodename;
-	n->GetName(nodename);
+	FString nodename = n->GetName();
 
 	NodeType type = GetNodeType(n, NodeType::node);
 	FString typeGroup = GetNodeTypeGroup(type);
@@ -2626,11 +3162,15 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 
 	UEdGraphNode_Comment* comment = dynamic_cast<UEdGraphNode_Comment*>(n);
 	FLinearColor titleColor = (comment) ? comment->CommentColor : n->GetNodeTitleColor();
+	int commentSize = (comment) ? comment->GetFontSize() : 18;
 
-	if (type == NodeType::composite)
+	//if (type == NodeType::composite)
 	{
 		FString ftitle = n->GetNodeTitle(ENodeTitleType::FullTitle).ToString();
+		ftitle = ftitle.Replace(TEXT("\r"),TEXT(""));
 		ftitle.Split(TEXT("\n"), &title, &title2);
+		if (!title2.IsEmpty())
+			title2 = "<font point-size=\"_FONTSIZE2_\">" + title2 + "</font>";
 	}
 
 	if (type == NodeType::compact)
@@ -2655,14 +3195,21 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 
 		if (titleLen > 2)
 		{
-			BlueprintStyle.Add("_COMPACTSIZE_", "23");
-			BlueprintStyle.Add("_COMPACTWIDTH_", FString::Printf(TEXT("%d"), 75 + 9 * titleLen));
+			int charWidth = 10;
+			BlueprintStyle.Add("_COMPACTSIZE_", "17");
+			BlueprintStyle.Add("_COMPACTWIDTH_", FString::Printf(TEXT("%d"), 70 + charWidth * titleLen));
 		}
 		else
 		{
 			BlueprintStyle.Add("_COMPACTSIZE_", "36");
 			BlueprintStyle.Add("_COMPACTWIDTH_", "100");
 		}
+	}
+
+	if (type == NodeType::variableset)
+	{
+		BlueprintStyle.Add("_COMPACTSIZE_", "16");
+		BlueprintStyle.Add("_COMPACTWIDTH_", "90");
 	}
 
 	float posx = (float)n->NodePosX / _dpi;
@@ -2673,12 +3220,15 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 	TArray<FString> lines;											// we throw this away
 	FString comment_ = n->NodeComment.TrimStartAndEnd();
 	float numLines = comment_.ParseIntoArrayLines(lines, false);	// for bubble
+	comment_ = comment_.Replace(TEXT("\r"), TEXT(""));
 	comment_ = comment_.Replace(TEXT("\n"), TEXT(" <br/>"));		// after counting lines
+
+	bool hasDelegate = false;
 
 	BlueprintStyle.Add("_NODENAME_", nodename);
 	BlueprintStyle.Add("_NODEGUID_", n->NodeGuid.ToString());
 	BlueprintStyle.Add("_NODEICON_", GetNodeIcon(n));
-	BlueprintStyle.Add("_NODEDELEGATE_", GetDelegateIcon(n));
+	BlueprintStyle.Add("_NODEDELEGATE_", GetDelegateIcon(n,&hasDelegate));	//TODO: add node delegate tooltip
 	BlueprintStyle.Add("_NODETITLE_", title);
 	BlueprintStyle.Add("_NODETITLE2_", title2);
 	//BlueprintStyle.Add("_NODECOLOR_", createColorString(n->GetNodeBodyTintColor()));
@@ -2694,8 +3244,9 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 	BlueprintStyle.Add("_CLASS_", typeGroup);
 	BlueprintStyle.Add("_URL_", url);				//URL = "\ref SomeSubgraph"
 	BlueprintStyle.Add("_PORTROWS_", prepNodePortRows(prefix+_tab+_tab,n));
+	BlueprintStyle.Add("_FONTSIZECOMMENT_", FString::FromInt(commentSize));
 
-	FString nodeTemplate = getNodeTemplate(type);
+	FString nodeTemplate = getNodeTemplate(type, hasDelegate);
 
 	*out << *prepTemplateString(prefix + _tab, BlueprintStyle, nodeTemplate) << endl;
 
@@ -2705,7 +3256,8 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 		float lineHeight = 22.0f;
 		float margin = 29.0f;
 
-		float cposx = posx + (type==NodeType::route ? -.228f : 0.0f);
+		//float cposx = posx + (type==NodeType::route ? -.228f : 0.0f);	//&reg;
+		float cposx = posx + (type == NodeType::route ? -.226f : 0.0f);	//&#10752;
 		float cposy = posy + ((numLines * lineHeight) + margin) / _dpi;
 
 		BlueprintStyle.Add("_POS_", FString::Printf(TEXT("%0.2f,%0.2f!"), cposx, cposy));
