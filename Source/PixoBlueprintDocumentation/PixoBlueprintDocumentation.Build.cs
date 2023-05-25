@@ -43,7 +43,9 @@ public class PixoBlueprintDocumentation : ModuleRules
                 "BlueprintGraph",
                 "ImageWrapper",
                 "HTTP",
-                "Json"
+                //"Json",
+                "RHI",
+                "RenderCore"
 				// ... add private dependencies that you statically link with here ...	
 			}
             );

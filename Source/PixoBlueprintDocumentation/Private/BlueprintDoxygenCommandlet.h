@@ -24,6 +24,9 @@ using namespace std;
  *  - `Engine\Source\Editor\UnrealEd\Private\Commandlets\CompileAllBlueprintsCommandlet.cpp`
  *  - `Engine\Source\Editor\Kismet\Private\BlueprintCompilationManager.cpp`
  * 
+ * Tweak your build settings
+ * https://www.oneoddsock.com/2020/07/08/ue4-how-to-write-a-commandlet/
+ * 
  * Use (for example):
  * ./UnrealEditor-Cmd.exe "X:\PixoVR\Documentation_5_0\Documentation_5_0.uproject" -nullrhi -nopause -nosplash -run=BlueprintDoxygen -LogCmds="global none, LOG_DOT all" -NoLogTimes -OutputMode=doxygen -OutputDir="X:\PixoVR\documentation\docs-root\documentation\pages\blueprints2"
  * ... and without the end parameters for usage message.

@@ -3,6 +3,14 @@
 #include "BlueprintDoxygenCommandlet.h"
 
 #include "AssetRegistryModule.h"
+#include "GenericPlatform/GenericPlatformFile.h"
+//#include "GenericPlatform/GenericPlatformMisc.h"
+
+#include "ObjectTools.h"
+#include "Misc/DefaultValueHelper.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Internationalization/Regex.h"
 
 #include "EdGraphNode_Comment.h"
 #include "EdGraphSchema_K2.h"
@@ -13,35 +21,24 @@
 //#include "K2Node_VariableSet.h"
 #include "K2Node_MacroInstance.h"
 #include "K2Node_CallFunction.h"
+#include "K2Node_FunctionEntry.h"
 //#include "K2Node_SpawnActor.h"
 //#include "K2Node_ConstructObjectFromClass.h"
-//#include "K2Node_PromotableOperator.h"
-#include "Kismet2/BlueprintEditorUtils.h"
-
-#include "MaterialGraph/MaterialGraph.h"
-// 
 //#include "K2Node_AddPinInterface.h"
 
-#include "ObjectTools.h"
-#include "Misc/DefaultValueHelper.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "Internationalization/Regex.h"
-//#include "Serialization/JsonSerializerMacros.h"
-
-#include "IImageWrapperModule.h"
-#include "IImageWrapper.h"
-#include "UObject/UObjectThreadContext.h"
-
-#include "GenericPlatform/GenericPlatformFile.h"
-//#include "GenericPlatform/GenericPlatformMisc.h"
-//#include "GenericPlatform/GenericPlatformHttp.h"
-//#include "PlatformHttp.h"
-//#include "Containers/StringConv.h"
+#include "Kismet2/BlueprintEditorUtils.h"
+#include "MaterialGraph/MaterialGraph.h"
 
 #include "Engine/ObjectLibrary.h"
 #include "Engine/Texture2D.h"
 #include "ThumbnailRendering/ThumbnailManager.h"
+#include "IImageWrapperModule.h"
+#include "IImageWrapper.h"
+#include "UObject/UObjectThreadContext.h"
+
+#include "Editor/UnrealEdEngine.h"
+
+extern UNREALED_API UUnrealEdEngine* GUnrealEd;
 
 DEFINE_LOG_CATEGORY_STATIC(LOG_DOT, Log, All);
 
@@ -145,7 +142,9 @@ void UBlueprintDoxygenCommandlet::InitCommandLine(const FString& Params)
 
 	if (SwitchParams.Contains(TEXT("OutputDir")))
 	{	outputDir = *SwitchParams[TEXT("OutputDir")];
-		outputDir.TrimStartAndEndInline();				//Sorry if you want a directory ending with a space!
+		outputDir.TrimStartAndEndInline();			//Sorry if you want a directory ending with a space!
+		outputDir.RemoveFromEnd("/");				//remove dir slash if present
+		outputDir.RemoveFromEnd("\\");				//remove dir slash if present
 		//printf("output dir: %s\n", TCHAR_TO_UTF8(*outputDir));
 	}
 
@@ -458,10 +457,11 @@ void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, UBlueprint* bl
 	if (outputDir != "-")
 	{
 		IPlatformFile& platformFile = FPlatformFileManager::Get().GetPlatformFile();
-		subDir = package->GetName();			//get the full UDF path
-		subDir = FPaths::GetPath(subDir);		//chop the "file" entry off
-		currentDir = outputDir + "/" + subDir;
-		FPaths::NormalizeDirectoryName(currentDir);
+		subDir = package->GetName();				//get the full UDF path
+		subDir = FPaths::GetPath(subDir);			//chop the "file" entry off
+		subDir.RemoveFromStart("/");				//remove prefix slash from UFS path
+		currentDir = outputDir + "/" + subDir;		//jam it all together
+		FPaths::NormalizeDirectoryName(currentDir);	//fix/normalize the slashes
 
 		// Directory Exists?
 		//FPaths::DirectoryExists(dir);
@@ -689,12 +689,24 @@ void UBlueprintDoxygenCommandlet::ReportGraph(FString prefix, UEdGraph* g)
 		writeGraphHeader(prefix, g, "Blueprint");
 
 	for (UEdGraphNode* n : g->Nodes)
+	{
 		ReportNode(prefix + _tab, n);
+	}
 
 	if (outputMode & doxygen)
 	{	writeGraphConnections(prefix);
 		writeGraphFooter(prefix, g);
 	}
+
+	//TODO: local variables for a function (graph)
+	// if n is UK2Node_Function (Entry, etc)
+	//find local variables
+	// FBlueprintEditorUtils::FindLocalVariable
+	// FBlueprintEditorUtils::GetLocalVariablesOfType
+	//	casts to UK2Node_FunctionEntry (node)
+	//  node->LocalVariables
+	//  //iterate from there
+	//g->loca
 
 	TotalGraphsProcessed++;
 }
@@ -916,17 +928,19 @@ FString UBlueprintDoxygenCommandlet::GetTrimmedConfigFilePath(FString path)
 {
 	//TODO: chop the head of this path off to be proper
 	FString confdir = FPaths::ProjectConfigDir();
+	confdir.RemoveFromEnd("/");
+	confdir = FPaths::GetPath(confdir)+"/";
 
-	FString trimmed = path.LeftChop(confdir.Len());
+	FPaths::NormalizeDirectoryName(confdir);
+	FPaths::NormalizeFilename(path);
 
-	wcout << "TRIMMED: " << *trimmed << " || " << *confdir << " || " << *path << endl;
-
-	trimmed = path;
+	FString trimmed = path;
 	trimmed.RemoveFromStart(confdir);
+	trimmed.RemoveFromStart("/");
 
-	wcout << "TRIMMED: " << *trimmed << " || " << *confdir << " || " << *path << endl;
+	//wcout << "TRIMMED: " << *trimmed << " || " << *confdir << " || " << *path << endl;
 
-	return path;
+	return trimmed;
 }
 
 // straight up copied from SGraphNode.cpp
@@ -1460,13 +1474,25 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject *object, FString p
 	else
 		printf("No T ObjectThumbnail!\n");
 */
-	/*
+	
+	if(IsAllowCommandletRendering())
+		printf("ALLOW COMMANDLET RENDERING\n");
+	else
+		printf("NO COMMANDLET RENDERING!\n");
+
+	if (GUnrealEd)
+		printf("YES, ED\n");
+	else
+		printf("NO, ED\n");
+
+	//FRenderResource::InitResource();
+
 	FObjectThumbnail* ObjectThumbnail = ThumbnailTools::GenerateThumbnailForObjectToSaveToDisk(object);
 	if (ObjectThumbnail)
 	{
 		int32 w = ObjectThumbnail->GetImageWidth();
 		int32 h = ObjectThumbnail->GetImageHeight();
-		printf("ObjectThumbnail %d x %d\n",w,h);
+		printf("ObjectThumbnail %d x %d\n", w, h);
 
 		IImageWrapperModule& ImageWrapperModule = FModuleManager::Get().LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
 		TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
@@ -1478,13 +1504,17 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject *object, FString p
 			const TArray64<uint8>& CompressedByteArray = ImageWrapper->GetCompressed();
 			if (!FFileHelper::SaveArrayToFile(CompressedByteArray, *pngPath))
 			{	//UE_LOG(LOG_DOT, Error, TEXT("Could not save thumbnail: '%s'."), *pngPath);
-				return false;
+				//return false;
+				printf("saved file!\n");
 			}
+			else
+				printf("no saved file!\n");
 
-			return true;
+			//return true;
 		}
 	}
-	*/
+	else
+		printf("NO ObjectThumbnail\n");
 
 	wcout << "TODO: finish image save.  Don't point to fixed path." << endl;
 
@@ -1691,6 +1721,7 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	FString packageNameBreaks = packageName.Replace(TEXT("/"), TEXT("&thinsp;/"));
 	//packageName = packageName.Replace(TEXT("/"), TEXT("&zwnj;/"));
 
+	//UEdGraphNode::GetDeprecationResponse()
 	//FName MetaDeprecated = TEXT("DeprecatedNode");
 	//bool isDeprecated = blueprint->bDeprecate;		//TODO fixme!
 	bool isDeprecated = false;
@@ -1773,7 +1804,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 	*/
 
 	wcout << "TODO: add other vars.  They're not as important and make the documentation messy." << endl;
-	/*
+
 	TSet<FName> variables;
 	FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, false);
 	//FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, true);
@@ -1784,7 +1815,6 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 		nonPrivateVars.Add(n);
 		wcout << *n.ToString() << endl;
 	}
-	*/
 
 	//need:
 	// private/public/protected			[x] not sure it's correct
@@ -1802,6 +1832,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 	members.Add("protected", TMap<FString, TArray<FString> >());
 	members.Add("private", TMap<FString, TArray<FString> >());
 
+	//variables new to this class (added to it's parent class)
 	TArray<FBPVariableDescription> vars = blueprint->NewVariables;
 	for (FBPVariableDescription v : vars)
 	{
@@ -1847,6 +1878,8 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 		bool isConst = flags & EPropertyFlags::CPF_ConstParm;
 		bool isInstanceEditable = !(flags & EPropertyFlags::CPF_DisableEditOnInstance);
 		bool isConfigSaved = flags & EPropertyFlags::CPF_Config;
+
+		//TODO: get more data	UEdGraphNode::GetDeprecationResponse
 		bool isDeprecated = flags & EPropertyFlags::CPF_Deprecated;
 		FString sDeprecated = fp->GetMetaData("DeprecationMessage");
 		sDeprecated = sDeprecated.Replace(TEXT("\r"), TEXT(""));
@@ -1865,11 +1898,18 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 
 		//isPrivate = flags & EPropertyFlags::CPF_NativeAccessSpecifierPrivate;
 
-		FString e = FString::Printf(TEXT("%s%s %s = \"%s\";\t//!< %s"),
+		//FString e = FString::Printf(TEXT("%s%s %s = \"%s\";\t//!< %s"),
+		//	isConst ? "const " : "",
+		//	*type,
+		//	*variableName,
+		//	*initializer,
+		//	*description
+		//);
+
+		FString e = FString::Printf(TEXT("%s%s %s;\t//!< %s"),
 			isConst ? "const " : "",
 			*type,
 			*variableName,
-			*initializer,
 			*description
 		);
 
@@ -2669,12 +2709,27 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 	case NodeType::variableset:
 	case NodeType::variable:		// local variables
 		{
+			//Local Variables don't get a url.  Let's get a list of those.
+			TArray<UK2Node_FunctionEntry*> fe_nodes;
+			TArray<FName> locals;
+			node->GetGraph()->GetNodesOfClass<UK2Node_FunctionEntry>(fe_nodes);
+			if (fe_nodes.Num() == 1)
+			for (FBPVariableDescription& LocalVar : fe_nodes[0]->LocalVariables)
+			{
+				locals.Add(LocalVar.VarName);
+				//wcout << "FBP: " << *LocalVar.VarName.ToString() << " node: " << *node->GetName() << endl;
+			}
+
 			UK2Node_Variable* variable = dynamic_cast<UK2Node_Variable*>(node);
 			//UK2Node_VariableSet
 
 			if (variable)
 			{
 				FProperty* fp = variable->GetPropertyForVariable();
+
+				//wcout << "FPp: " << *fp->NamePrivate.ToString() << endl;
+				if (locals.Contains(fp->NamePrivate))	//local variables don't get a URL.
+					return "";
 
 				UClass *blueprintClass = variable->VariableReference.GetMemberParentClass();
 				if (blueprintClass)
