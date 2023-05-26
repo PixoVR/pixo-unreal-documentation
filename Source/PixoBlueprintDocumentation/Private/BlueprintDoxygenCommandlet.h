@@ -42,6 +42,9 @@ class UBlueprintDoxygenCommandlet : public UCommandlet
 	virtual int32 Main(const FString& Params) override;
 	// End UCommandlet Interface
 
+	//yeah man	//TODO: remove or fix!
+	//virtual void CreateCustomEngine(const FString& Params);
+
 protected:
 
 	typedef TMap<FString, FString> vmap;	//name value pairs
@@ -118,6 +121,7 @@ protected:
 	virtual bool OpenFile(FString fpath, bool append=false);
 	virtual bool CloseFile();
 	bool CreateThumbnailFile(UObject *object, FString pngPath);
+	bool CreateThumbnailFile2(UObject* object, FString pngPath);	//TODO: remove this
 	FString GetTrimmedConfigFilePath(FString path);
 
 	//blueprint stuff

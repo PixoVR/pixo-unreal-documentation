@@ -37,8 +37,11 @@
 #include "UObject/UObjectThreadContext.h"
 
 #include "Editor/UnrealEdEngine.h"
+#include "Editor/EditorEngine.h"
 
 extern UNREALED_API UUnrealEdEngine* GUnrealEd;
+extern UNREALED_API UEditorEngine* GEditor;
+//#include "LaunchEngineLoop.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LOG_DOT, Log, All);
 
@@ -55,6 +58,11 @@ UBlueprintDoxygenCommandlet::UBlueprintDoxygenCommandlet(const FObjectInitialize
 {
 	BlueprintBaseClassName = UBlueprint::StaticClass()->GetFName();
 	MaterialBaseClassName = UMaterial::StaticClass()->GetFName();
+
+	//IsClient = false;
+	//IsEditor = false;
+	//IsServer = false;
+	//LogToConsole = true;
 
 	BlueprintStyle.Empty();
 	BlueprintStyle.Add("_STYLESHEET_", stylesheet);
@@ -110,6 +118,28 @@ int32 UBlueprintDoxygenCommandlet::Main(const FString& Params)
 
 	return (TotalNumFatalIssues + TotalNumFailedLoads);
 }
+
+/*
+void UBlueprintDoxygenCommandlet::CreateCustomEngine(const FString& Params)
+{
+	printf("GONNA START ENGINE\n");
+	UClass* EngineClass = nullptr;
+	FString UnrealEdEngineClassName;
+	GConfig->GetString(TEXT("/Script/Engine.Engine"), TEXT("UnrealEdEngine"), UnrealEdEngineClassName, GEngineIni);
+	EngineClass = StaticLoadClass(UUnrealEdEngine::StaticClass(), nullptr, *UnrealEdEngineClassName);
+	wcout << "GIsEditor: " << GIsEditor << "Engine class: " << *UnrealEdEngineClassName << endl;
+	if (EngineClass == nullptr)
+	{
+		UE_LOG(LogInit, Fatal, TEXT("Failed to load UnrealEd Engine class '%s'."), *UnrealEdEngineClassName);
+	}
+	//GEngine=GEditor=GUnrealEd=NewObject<UUnrealEdEngine>(GetTransientPackage(), EngineClass);
+	GEngine=NewObject<UUnrealEdEngine>(GetTransientPackage(), EngineClass);
+
+	//FEngineLoop::Init();
+	//FEngineLoop::AppInit();
+	printf("STARTED ENGINE\n");
+}
+*/
 
 void UBlueprintDoxygenCommandlet::InitCommandLine(const FString& Params)
 {
@@ -1353,7 +1383,196 @@ FLinkerLoad* CreateLinkerForFilename(FUObjectSerializeContext* LoadContext, cons
 	return Linker;
 }
 
-bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject *object, FString pngPath)
+
+
+
+
+
+
+bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, TSet< FName >& InObjectFullNames, FThumbnailMap& InOutThumbnails)
+{
+	// Create a file reader to load the file
+	TUniquePtr< FArchive > FileReader(IFileManager::Get().CreateFileReader(*InPackageFileName));
+	if (FileReader == nullptr)
+	{
+		// Couldn't open the file
+		return false;
+	}
+
+	// Read package file summary from the file
+	FPackageFileSummary FileSummary;
+	(*FileReader) << FileSummary;
+
+	// Make sure this is indeed a package
+	if (FileSummary.Tag != PACKAGE_FILE_TAG || FileReader->IsError())
+	{
+		// Unrecognized or malformed package file
+		return false;
+	}
+
+
+	// Does the package contains a thumbnail table?
+	if (FileSummary.ThumbnailTableOffset == 0)
+	{
+		// No thumbnails to be loaded
+		return false;
+	}
+
+	// Seek the the part of the file where the thumbnail table lives
+	FileReader->Seek(FileSummary.ThumbnailTableOffset);
+
+	int32 LastFileOffset = -1;
+	// Load the thumbnail table of contents
+	TMap< FName, int32 > ObjectNameToFileOffsetMap;
+	{
+		// Load the thumbnail count
+		int32 ThumbnailCount = 0;
+		*FileReader << ThumbnailCount;
+
+		// Load the names and file offsets for the thumbnails in this package
+		for (int32 CurThumbnailIndex = 0; CurThumbnailIndex < ThumbnailCount; ++CurThumbnailIndex)
+		{
+			bool bHaveValidClassName = false;
+			FString ObjectClassName;
+			*FileReader << ObjectClassName;
+
+			// Object path
+			FString ObjectPathWithoutPackageName;
+			*FileReader << ObjectPathWithoutPackageName;
+
+			FString ObjectPath;
+
+			// handle UPackage thumbnails differently from usual assets
+			if (ObjectClassName == UPackage::StaticClass()->GetName())
+			{
+				ObjectPath = ObjectPathWithoutPackageName;
+			}
+			else
+			{
+				ObjectPath = (FPackageName::FilenameToLongPackageName(InPackageFileName) + TEXT(".") + ObjectPathWithoutPackageName);
+			}
+
+			wcout << "objectpath: " << *ObjectPath << endl;
+
+			// If the thumbnail was stored with a missing class name ("???") when we'll catch that here
+			if (ObjectClassName.Len() > 0 && ObjectClassName != TEXT("???"))
+			{
+				bHaveValidClassName = true;
+			}
+			else
+			{
+				// Class name isn't valid.  Probably legacy data.  We'll try to fix it up below.
+			}
+
+			if (!bHaveValidClassName)
+			{
+				wcout << "not valid class name " << endl;
+				return false;
+
+				/*
+				// Try to figure out a class name based on input assets.  This should really only be needed
+				// for packages saved by older versions of the editor (VER_CONTENT_BROWSER_FULL_NAMES)
+				for (TSet<FName>::TConstIterator It(InObjectFullNames); It; ++It)
+				{
+					const FName& CurObjectFullNameFName = *It;
+
+					FString CurObjectFullName;
+					CurObjectFullNameFName.ToString(CurObjectFullName);
+
+					if (CurObjectFullName.EndsWith(ObjectPath))
+					{
+						// Great, we found a path that matches -- we just need to add that class name
+						const int32 FirstSpaceIndex = CurObjectFullName.Find(TEXT(" "));
+						check(FirstSpaceIndex != -1);
+						ObjectClassName = CurObjectFullName.Left(FirstSpaceIndex);
+
+						// We have a useful class name now!
+						bHaveValidClassName = true;
+						break;
+					}
+				}
+				*/
+			}
+
+
+			// File offset to image data
+			int32 FileOffset = 0;
+			*FileReader << FileOffset;
+
+			if (FileOffset != -1 && FileOffset < LastFileOffset)
+			{
+				UE_LOG(LOG_DOT, Warning, TEXT("Loaded thumbnail '%s' out of order!: FileOffset:%i    LastFileOffset:%i"), *ObjectPath, FileOffset, LastFileOffset);
+			}
+
+
+			if (bHaveValidClassName)
+			{
+				// Create a full name string with the object's class and fully qualified path
+				const FString ObjectFullName(ObjectClassName + TEXT(" ") + ObjectPath);
+
+
+				// Add to our map
+				ObjectNameToFileOffsetMap.Add(FName(*ObjectFullName), FileOffset);
+				InObjectFullNames.Add(FName(*ObjectFullName));
+			}
+			else
+			{
+				// Oh well, we weren't able to fix the class name up.  We won't bother making this
+				// thumbnail available to load
+				wcout << "couldn't fix class name" << endl;
+			}
+		}
+	}
+
+	wcout << "exiting before loading..." << endl;
+
+	// @todo CB: Should sort the thumbnails to load by file offset to reduce seeks [reviewed; pre-qa release]
+	for (TSet<FName>::TConstIterator It(InObjectFullNames); It; ++It)
+	{
+		const FName& CurObjectFullName = *It;
+
+		// Do we have this thumbnail in the file?
+		// @todo thumbnails: Backwards compat
+		const int32* pFileOffset = ObjectNameToFileOffsetMap.Find(CurObjectFullName);
+		if (pFileOffset != NULL)
+		{
+			// Seek to the location in the file with the image data
+			FileReader->Seek(*pFileOffset);
+
+			// Load the image data
+			FObjectThumbnail LoadedThumbnail;
+			LoadedThumbnail.Serialize(*FileReader);
+
+			// Store the data!
+			InOutThumbnails.Add(CurObjectFullName, LoadedThumbnail);
+
+			int32 w = LoadedThumbnail.GetImageWidth();
+			int32 h = LoadedThumbnail.GetImageHeight();
+			wcout << "THUMB: " << *CurObjectFullName.ToString() << " " << w << "x" << h << endl;
+		}
+		else
+		{
+			// Couldn't find the requested thumbnail in the file!
+		}
+	}
+
+	return true;
+}
+
+
+bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString pngPath)
+{
+
+	return false;
+}
+
+
+
+
+
+
+
+bool UBlueprintDoxygenCommandlet::CreateThumbnailFile2(UObject *object, FString pngPath)
 {
 	/*
 	//FString AssetPath = object->FSoft
@@ -1414,6 +1633,11 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject *object, FString p
 
 	*/
 
+	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(object) : nullptr;
+	if (RenderInfo)
+		printf("RENDERING INFO!\n");
+	else
+		printf("NO RENDERING INFO!\n");
 /*
 	//FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(object) : nullptr;
 
@@ -1460,30 +1684,56 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject *object, FString p
 		else
 			wcout << "no map!" << endl;
 	}
-
+*/
 	wcout << "Trying to find: " << *object->GetPathName() << endl;
+	wcout << "Trying to find: " << *object->GetFullName() << endl;
+
+	//ThumbnailTools::GetPackageNameForObject(object);
 
 	//if (ThumbnailTools::LoadThumbnailsFromPackage
-	const FObjectThumbnail* t = ThumbnailTools::FindCachedThumbnail(object->GetPathName());
+	//const FObjectThumbnail* t = ThumbnailTools::FindCachedThumbnail(object->GetPathName());
+	//const FObjectThumbnail* t = ThumbnailTools::FindCachedThumbnail(object->GetFullName());
+
+	//ThumbnailTools::RenderThumbnail
+
+
+	const FObjectThumbnail* t = ThumbnailTools::GetThumbnailForObject(object);
 	if (t)
 	{
 		int32 w = t->GetImageWidth();
 		int32 h = t->GetImageHeight();
-		printf("T ObjectThumbnail %d x %d\n", w, h);
+		printf("1 T ObjectThumbnail %d x %d\n", w, h);
 	}
 	else
-		printf("No T ObjectThumbnail!\n");
-*/
+		printf("1 No T ObjectThumbnail!\n");
+
+	t = ThumbnailTools::FindCachedThumbnail(object->GetFullName());
+	if (t)
+	{
+		int32 w = t->GetImageWidth();
+		int32 h = t->GetImageHeight();
+		printf("2 T ObjectThumbnail %d x %d\n", w, h);
+	}
+	else
+		printf("2 No T ObjectThumbnail!\n");
 	
 	if(IsAllowCommandletRendering())
 		printf("ALLOW COMMANDLET RENDERING\n");
 	else
 		printf("NO COMMANDLET RENDERING!\n");
 
+	if(GUnrealEd)
+		printf("YES ED\n");
+	else
+		printf("NO ED!\n");
+
+
+	/*
 	if (GUnrealEd)
 		printf("YES, ED\n");
 	else
 		printf("NO, ED\n");
+	*/
 
 	//FRenderResource::InitResource();
 
@@ -1516,14 +1766,84 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject *object, FString p
 	else
 		printf("NO ObjectThumbnail\n");
 
+
 	wcout << "TODO: finish image save.  Don't point to fixed path." << endl;
+
+
+
+
+
+	FString Filename2 = "X:/PixoVR/Documentation_5_0/Plugins/pixo-unreal-documentation/Content/Blueprints/BP_ActorTest.uasset";
+	wcout << "FILE: " << *Filename2 << endl;
+
+	// Create a file reader to load the file                                                         
+	TUniquePtr< FArchive > FileReader(IFileManager::Get().CreateFileReader(*Filename2));
+	if (FileReader == nullptr)
+	{
+		// Couldn't open the file                                                                
+		wcout << "COULDN't open." << endl;
+	}
+	else
+	{
+		// Read package file summary from the file                                                       
+		FPackageFileSummary FileSummary;
+		(*FileReader) << FileSummary;
+
+		// Make sure this is indeed a package                                                            
+		if (FileSummary.Tag != PACKAGE_FILE_TAG || FileReader->IsError())
+		{
+			// Unrecognized or malformed package file                                                
+			wcout << "bad package file " << endl;
+		}
+		else
+		{
+			// Does the package contains a thumbnail table?                                                  
+			if (FileSummary.ThumbnailTableOffset == 0)
+			{
+				// No thumbnails to be loaded                                                            
+				wcout << "NO THUMBNAILS!" << endl;
+			}
+			else
+			{
+				wcout << "HAS THUMBNAILS!" << endl;
+
+				int32 LastFileOffset = -1;
+				// Load the thumbnail table of contents              
+				TMap< FName, int32 > ObjectNameToFileOffsetMap;
+				{
+					// Load the thumbnail count                  
+					int32 ThumbnailCount = 0;
+					*FileReader << ThumbnailCount;
+					wcout << ThumbnailCount << " thumbs." << endl;
+				}
+			}
+		}
+	}
+
+	wcout << "=======================" << endl;
+
+	//TArray<FName> thumbs;
+	TSet<FName> InObjectFullNames;
+	FThumbnailMap InOutThumbnails;
+
+	bool ltfp = LoadThumbnailsFromPackageInternal(Filename2, InObjectFullNames, InOutThumbnails);
+	if (ltfp)
+		wcout << "LOADED from " << *Filename2 << endl;
+	else
+		wcout << "FAILED LOAD from " << *Filename2 << endl;
+
+	wcout << "=======================" << endl;
+
+	return true;
+
+
 
 	FLinkerLoad* Linker = nullptr;
 	UPackage* Package = nullptr;
 	//FArchiveStackTraceReader* Reader = nullptr;
 
-	//FString Filename = "X:/PixoVR/Documentation_5_0/Plugins/pixo-unreal-documentation/Content/Blueprints/BP_ConnectionTest.uasset";
 	FString Filename = "X:/PixoVR/Documentation_5_0/Plugins/pixo-unreal-documentation/Content/Materials/Material_Test.uasset";
+	wcout << "FILE: " << *Filename << endl;
 
 	//Filename = "C:/Program Files/Epic Games/UE_5.0/Engine/Content/Animation/DefaultAnimBoneCompressionSettings.uasset";
 
