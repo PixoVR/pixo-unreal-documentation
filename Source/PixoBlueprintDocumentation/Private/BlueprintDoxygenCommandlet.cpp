@@ -233,6 +233,7 @@ void UBlueprintDoxygenCommandlet::BuildAssetLists()
 	//========
 
 	AssetRegistryModule.Get().GetAssetsByClass(BlueprintBaseClassName, BlueprintAssetList, true);
+	//AssetRegistryModule.Get().GetAllAssets(BlueprintAssetList, true);
 
 	if (outputMode & OutputMode::verbose)
 		UE_LOG(LOG_DOT, Warning, TEXT("Found %d blueprints in asset registry."), BlueprintAssetList.Num());
@@ -1370,6 +1371,8 @@ FString UBlueprintDoxygenCommandlet::createVariableName(FString name, bool force
 	return variableName;
 }
 
+
+//TODO: delete this
 FLinkerLoad* CreateLinkerForFilename(FUObjectSerializeContext* LoadContext, const FString& InFilename)
 {
 	FString TempPackageName;
@@ -1389,15 +1392,14 @@ FLinkerLoad* CreateLinkerForFilename(FUObjectSerializeContext* LoadContext, cons
 
 
 
-bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, TSet< FName >& InObjectFullNames, FThumbnailMap& InOutThumbnails)
+bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, FThumbnailMap& InOutThumbnails)
 {
+	TSet<FName> ObjectFullNames;
+
 	// Create a file reader to load the file
 	TUniquePtr< FArchive > FileReader(IFileManager::Get().CreateFileReader(*InPackageFileName));
 	if (FileReader == nullptr)
-	{
-		// Couldn't open the file
-		return false;
-	}
+		return false;		// Couldn't open the file
 
 	// Read package file summary from the file
 	FPackageFileSummary FileSummary;
@@ -1405,18 +1407,11 @@ bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, TSet< F
 
 	// Make sure this is indeed a package
 	if (FileSummary.Tag != PACKAGE_FILE_TAG || FileReader->IsError())
-	{
-		// Unrecognized or malformed package file
-		return false;
-	}
-
+		return false;		// Unrecognized or malformed package file
 
 	// Does the package contains a thumbnail table?
 	if (FileSummary.ThumbnailTableOffset == 0)
-	{
-		// No thumbnails to be loaded
-		return false;
-	}
+		return false;		// No thumbnails to be loaded
 
 	// Seek the the part of the file where the thumbnail table lives
 	FileReader->Seek(FileSummary.ThumbnailTableOffset);
@@ -1444,92 +1439,44 @@ bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, TSet< F
 
 			// handle UPackage thumbnails differently from usual assets
 			if (ObjectClassName == UPackage::StaticClass()->GetName())
-			{
 				ObjectPath = ObjectPathWithoutPackageName;
-			}
 			else
-			{
 				ObjectPath = (FPackageName::FilenameToLongPackageName(InPackageFileName) + TEXT(".") + ObjectPathWithoutPackageName);
-			}
 
 			wcout << "objectpath: " << *ObjectPath << endl;
 
 			// If the thumbnail was stored with a missing class name ("???") when we'll catch that here
 			if (ObjectClassName.Len() > 0 && ObjectClassName != TEXT("???"))
-			{
 				bHaveValidClassName = true;
-			}
-			else
-			{
-				// Class name isn't valid.  Probably legacy data.  We'll try to fix it up below.
-			}
-
-			if (!bHaveValidClassName)
-			{
-				wcout << "not valid class name " << endl;
-				return false;
-
-				/*
-				// Try to figure out a class name based on input assets.  This should really only be needed
-				// for packages saved by older versions of the editor (VER_CONTENT_BROWSER_FULL_NAMES)
-				for (TSet<FName>::TConstIterator It(InObjectFullNames); It; ++It)
-				{
-					const FName& CurObjectFullNameFName = *It;
-
-					FString CurObjectFullName;
-					CurObjectFullNameFName.ToString(CurObjectFullName);
-
-					if (CurObjectFullName.EndsWith(ObjectPath))
-					{
-						// Great, we found a path that matches -- we just need to add that class name
-						const int32 FirstSpaceIndex = CurObjectFullName.Find(TEXT(" "));
-						check(FirstSpaceIndex != -1);
-						ObjectClassName = CurObjectFullName.Left(FirstSpaceIndex);
-
-						// We have a useful class name now!
-						bHaveValidClassName = true;
-						break;
-					}
-				}
-				*/
-			}
-
-
-			// File offset to image data
-			int32 FileOffset = 0;
-			*FileReader << FileOffset;
-
-			if (FileOffset != -1 && FileOffset < LastFileOffset)
-			{
-				UE_LOG(LOG_DOT, Warning, TEXT("Loaded thumbnail '%s' out of order!: FileOffset:%i    LastFileOffset:%i"), *ObjectPath, FileOffset, LastFileOffset);
-			}
-
 
 			if (bHaveValidClassName)
 			{
+				// File offset to image data
+				int32 FileOffset = 0;
+				*FileReader << FileOffset;
+
+				if (FileOffset != -1 && FileOffset < LastFileOffset)
+				{	UE_LOG(LOG_DOT, Warning, TEXT("Loaded thumbnail '%s' out of order!: FileOffset:%i    LastFileOffset:%i"), *ObjectPath, FileOffset, LastFileOffset);		}
+
 				// Create a full name string with the object's class and fully qualified path
 				const FString ObjectFullName(ObjectClassName + TEXT(" ") + ObjectPath);
 
-
 				// Add to our map
-				ObjectNameToFileOffsetMap.Add(FName(*ObjectFullName), FileOffset);
-				InObjectFullNames.Add(FName(*ObjectFullName));
+				ObjectNameToFileOffsetMap.Add( FName(*ObjectFullName), FileOffset);
 			}
 			else
 			{
 				// Oh well, we weren't able to fix the class name up.  We won't bother making this
 				// thumbnail available to load
-				wcout << "couldn't fix class name" << endl;
+				continue;
 			}
 		}
 	}
 
-	wcout << "exiting before loading..." << endl;
-
 	// @todo CB: Should sort the thumbnails to load by file offset to reduce seeks [reviewed; pre-qa release]
-	for (TSet<FName>::TConstIterator It(InObjectFullNames); It; ++It)
+	for (TPair<FName,int32> p : ObjectNameToFileOffsetMap)
 	{
-		const FName& CurObjectFullName = *It;
+		FName CurObjectFullName = p.Key;
 
 		// Do we have this thumbnail in the file?
 		// @todo thumbnails: Backwards compat
@@ -1543,12 +1490,15 @@ bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, TSet< F
 			FObjectThumbnail LoadedThumbnail;
 			LoadedThumbnail.Serialize(*FileReader);
 
-			// Store the data!
-			InOutThumbnails.Add(CurObjectFullName, LoadedThumbnail);
-
 			int32 w = LoadedThumbnail.GetImageWidth();
 			int32 h = LoadedThumbnail.GetImageHeight();
 			wcout << "THUMB: " << *CurObjectFullName.ToString() << " " << w << "x" << h << endl;
+
+			if (w * h > 0)
+			{
+				// Store the data!
+				InOutThumbnails.Add(CurObjectFullName, LoadedThumbnail);
+			}
 		}
 		else
 		{
@@ -1560,8 +1510,71 @@ bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, TSet< F
 }
 
 
+
+
+
+
 bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString pngPath)
 {
+	UPackage* package = object->GetPackage();
+
+	FString fullName = object->GetFullName();
+	wcout << "FNAME: |" << *fullName << "|" << endl;
+
+	/*
+	FString fullName2 = object->GetFName().ToString();
+	FString fullName3 = object->GetPathName();
+	FString fullName4 = object->GetClass()->GetName();
+
+	FString fullName5 = *UClass::ConvertFullNameToShortTypeFullName(fullName);
+
+	wcout << "FNAME: " << *fullName << "\n" << *fullName2 << "\n" << *fullName3 << "\n" << *fullName4 << " \n " << *fullName5 << endl;
+	*/
+
+	FLinkerLoad* Linker = package->LinkerLoad;
+	if (Linker->SerializeThumbnails(true))
+	{
+		if (Linker->LinkerRoot->HasThumbnailMap())
+		{
+			FThumbnailMap& LinkerThumbnails = Linker->LinkerRoot->AccessThumbnailMap();
+
+			for (TMap<FName, FObjectThumbnail>::TIterator It(LinkerThumbnails); It; ++It)
+			{
+				FName& ObjectFullName = It.Key();
+				FObjectThumbnail& Thumb = It.Value();
+
+				int32 w = Thumb.GetImageWidth();
+				int32 h = Thumb.GetImageHeight();
+				int32 s = Thumb.GetUncompressedImageData().Num();
+
+				//wcout << "RNAME: |" << *ObjectFullName.ToString() << "| " << w << "x" << h << " @ " << s << " bytes" << endl;
+
+				if ( w && h && s )
+				if (ObjectFullName.ToString() == fullName)
+				{
+					IImageWrapperModule& ImageWrapperModule = FModuleManager::Get().LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
+					TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
+					ImageWrapper->SetRaw(Thumb.GetUncompressedImageData().GetData(), Thumb.GetUncompressedImageData().Num(), w, h, ERGBFormat::BGRA, 8);
+
+					if (ImageWrapper)
+					{
+						wcout << "Writing to " << *pngPath << endl;
+
+						const TArray64<uint8>& CompressedByteArray = ImageWrapper->GetCompressed();
+						if (!FFileHelper::SaveArrayToFile(CompressedByteArray, *pngPath))
+						{
+							UE_LOG(LOG_DOT, Error, TEXT("Could not save thumbnail: '%s'."), *pngPath);
+							return false;
+						}
+
+						return true;
+					}
+				}
+			}
+
+			//UE_LOG(LOG_DOT, Warning, TEXT("Could not find thumbnail: '%s'."), *fullName);
+		}
+	}
 
 	return false;
 }
@@ -1638,7 +1651,7 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile2(UObject *object, FString 
 		printf("RENDERING INFO!\n");
 	else
 		printf("NO RENDERING INFO!\n");
-/*
+
 	//FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(object) : nullptr;
 
 	UPackage *package = object->GetPackage();
@@ -1654,6 +1667,10 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile2(UObject *object, FString 
 		else
 			wcout << "PACKAGE is BAD!" << endl;
 
+		FString pkgpath = package->GetLoadedPath().GetPackageFName().ToString();
+
+		package->FullyLoad();
+
 		/*
 		// Does the package have any thumbnails?
 		if (InPackage->HasThumbnailMap())
@@ -1665,7 +1682,7 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile2(UObject *object, FString 
 
 		return FoundThumbnail;
 		*/
-/*
+
 		if (!package->HasThumbnailMap())
 		{
 			wcout << "PACKAGE needs a map!" << endl;
@@ -1684,7 +1701,7 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile2(UObject *object, FString 
 		else
 			wcout << "no map!" << endl;
 	}
-*/
+
 	wcout << "Trying to find: " << *object->GetPathName() << endl;
 	wcout << "Trying to find: " << *object->GetFullName() << endl;
 
@@ -1823,10 +1840,10 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile2(UObject *object, FString 
 	wcout << "=======================" << endl;
 
 	//TArray<FName> thumbs;
-	TSet<FName> InObjectFullNames;
+	//TSet<FName> InObjectFullNames;
 	FThumbnailMap InOutThumbnails;
 
-	bool ltfp = LoadThumbnailsFromPackageInternal(Filename2, InObjectFullNames, InOutThumbnails);
+	bool ltfp = LoadThumbnailsFromPackageInternal(Filename2, InOutThumbnails);
 	if (ltfp)
 		wcout << "LOADED from " << *Filename2 << endl;
 	else
@@ -1935,7 +1952,10 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 		FString pngName = className + ".png";
 		FString pngPath = currentDir + "\\" + pngName;
 		FPaths::MakePlatformFilename(pngPath);
-		if (!CreateThumbnailFile(blueprint, pngPath))
+		if (
+				!CreateThumbnailFile(blueprint, pngPath)
+		//	||	!CreateThumbnailFile(blueprint->ParentClass, pngPath)
+		)
 		{
 			UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
 		}
@@ -2125,6 +2145,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 
 	wcout << "TODO: add other vars.  They're not as important and make the documentation messy." << endl;
 
+	/*
 	TSet<FName> variables;
 	FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, false);
 	//FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, true);
@@ -2135,6 +2156,7 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 		nonPrivateVars.Add(n);
 		wcout << *n.ToString() << endl;
 	}
+	*/
 
 	//need:
 	// private/public/protected			[x] not sure it's correct
