@@ -169,7 +169,8 @@ protected:
 	TArray<FString> ObjectNames;
 	TMap<FString, FString>	PinConnections;			//intended to be [SOURCE:port:_ -- DEST:port:_] [color], which forces uniqueness of connections despite direction
 	TMap<UEdGraph*, FString> GraphDescriptions;		//assuming parent graphs are parsed before children.  This is the description provided in the collapse node of the parent.
-	TMap<FString, TArray<FString>> GraphCalls;				//any node (url) mentioned in a graph is appended to the call graph.
+	TMap<FString, TArray<FString>> GraphCalls;		//any node (url) mentioned in a graph is appended to the call graph.
+	TArray<FString> GalleryList;					//list of image entries for the gallery.  Should be cleared before each group (Blueprint/Material/etc.)
 
 	/** Variables to store overall results */
 	int TotalGraphsProcessed;

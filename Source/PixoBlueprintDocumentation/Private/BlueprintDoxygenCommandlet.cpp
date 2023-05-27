@@ -343,9 +343,30 @@ void UBlueprintDoxygenCommandlet::ReportGroup(FString groupName, FString groupNa
 	\brief {2}
 
 {3}
+{4}
 */)PixoVR");
 
-	FString groupdata = FString::Format(*tmpl, { groupName, groupNamePretty, brief, details });
+	FString gallery = "";
+
+	if (GalleryList.Num())
+	{
+		FString galleryItems;
+
+		for (FString e : GalleryList)
+		{	galleryItems += "	" + e + "\n";	}
+
+		FString gtmpl(R"PixoVR(
+	<h2 class='groupheader'>Gallery</h2>
+	<div class='gallery'>
+{0}
+	</div>
+)PixoVR");
+
+		gallery = FString::Format(*gtmpl, { galleryItems });
+	}
+	GalleryList.Empty();		//reset the gallery
+
+	FString groupdata = FString::Format(*tmpl, { groupName, groupNamePretty, brief, details, gallery });
 
 	FString path = outputDir + "/" + _groups;
 	FPaths::MakePlatformFilename(path);
@@ -391,6 +412,7 @@ void UBlueprintDoxygenCommandlet::ReportBlueprints()
 			}
 			else
 			{
+				ReportBlueprint(_tab, LoadedBlueprint);
 				ReportGroup(
 					"blueprints",
 					"Blueprints",
@@ -399,7 +421,6 @@ void UBlueprintDoxygenCommandlet::ReportBlueprints()
 				"	per blueprint, and each graph may contain subgraphs.  Links to subgraphs can be accessed by\n"
 				"	clicking on their collapsed node or by navigating to the additional entries in the class."
 				);
-				ReportBlueprint(_tab, LoadedBlueprint);
 			}
 		}
 		else
@@ -1371,161 +1392,12 @@ FString UBlueprintDoxygenCommandlet::createVariableName(FString name, bool force
 	return variableName;
 }
 
-
-//TODO: delete this
-FLinkerLoad* CreateLinkerForFilename(FUObjectSerializeContext* LoadContext, const FString& InFilename)
-{
-	FString TempPackageName;
-	TempPackageName = FPaths::Combine(TEXT("/Temp"), *FPaths::GetPath(InFilename.Mid(InFilename.Find(TEXT(":"), ESearchCase::CaseSensitive) + 1)), *FPaths::GetBaseFilename(InFilename));
-	UPackage* Package = FindObjectFast<UPackage>(nullptr, *TempPackageName);
-	if (!Package)
-	{
-		Package = CreatePackage(*TempPackageName);
-	}
-	FLinkerLoad* Linker = FLinkerLoad::CreateLinker(LoadContext, Package, FPackagePath::FromLocalPath(InFilename), LOAD_NoVerify);
-	return Linker;
-}
-
-
-
-
-
-
-
-bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, FThumbnailMap& InOutThumbnails)
-{
-	TSet<FName> ObjectFullNames;
-
-	// Create a file reader to load the file
-	TUniquePtr< FArchive > FileReader(IFileManager::Get().CreateFileReader(*InPackageFileName));
-	if (FileReader == nullptr)
-		return false;		// Couldn't open the file
-
-	// Read package file summary from the file
-	FPackageFileSummary FileSummary;
-	(*FileReader) << FileSummary;
-
-	// Make sure this is indeed a package
-	if (FileSummary.Tag != PACKAGE_FILE_TAG || FileReader->IsError())
-		return false;		// Unrecognized or malformed package file
-
-	// Does the package contains a thumbnail table?
-	if (FileSummary.ThumbnailTableOffset == 0)
-		return false;		// No thumbnails to be loaded
-
-	// Seek the the part of the file where the thumbnail table lives
-	FileReader->Seek(FileSummary.ThumbnailTableOffset);
-
-	int32 LastFileOffset = -1;
-	// Load the thumbnail table of contents
-	TMap< FName, int32 > ObjectNameToFileOffsetMap;
-	{
-		// Load the thumbnail count
-		int32 ThumbnailCount = 0;
-		*FileReader << ThumbnailCount;
-
-		// Load the names and file offsets for the thumbnails in this package
-		for (int32 CurThumbnailIndex = 0; CurThumbnailIndex < ThumbnailCount; ++CurThumbnailIndex)
-		{
-			bool bHaveValidClassName = false;
-			FString ObjectClassName;
-			*FileReader << ObjectClassName;
-
-			// Object path
-			FString ObjectPathWithoutPackageName;
-			*FileReader << ObjectPathWithoutPackageName;
-
-			FString ObjectPath;
-
-			// handle UPackage thumbnails differently from usual assets
-			if (ObjectClassName == UPackage::StaticClass()->GetName())
-				ObjectPath = ObjectPathWithoutPackageName;
-			else
-				ObjectPath = (FPackageName::FilenameToLongPackageName(InPackageFileName) + TEXT(".") + ObjectPathWithoutPackageName);
-
-			wcout << "objectpath: " << *ObjectPath << endl;
-
-			// If the thumbnail was stored with a missing class name ("???") when we'll catch that here
-			if (ObjectClassName.Len() > 0 && ObjectClassName != TEXT("???"))
-				bHaveValidClassName = true;
-
-			if (bHaveValidClassName)
-			{
-				// File offset to image data
-				int32 FileOffset = 0;
-				*FileReader << FileOffset;
-
-				if (FileOffset != -1 && FileOffset < LastFileOffset)
-				{	UE_LOG(LOG_DOT, Warning, TEXT("Loaded thumbnail '%s' out of order!: FileOffset:%i    LastFileOffset:%i"), *ObjectPath, FileOffset, LastFileOffset);		}
-
-				// Create a full name string with the object's class and fully qualified path
-				const FString ObjectFullName(ObjectClassName + TEXT(" ") + ObjectPath);
-
-				// Add to our map
-				ObjectNameToFileOffsetMap.Add( FName(*ObjectFullName), FileOffset);
-			}
-			else
-			{
-				// Oh well, we weren't able to fix the class name up.  We won't bother making this
-				// thumbnail available to load
-				continue;
-			}
-		}
-	}
-
-	// @todo CB: Should sort the thumbnails to load by file offset to reduce seeks [reviewed; pre-qa release]
-	for (TPair<FName,int32> p : ObjectNameToFileOffsetMap)
-	{
-		FName CurObjectFullName = p.Key;
-
-		// Do we have this thumbnail in the file?
-		// @todo thumbnails: Backwards compat
-		const int32* pFileOffset = ObjectNameToFileOffsetMap.Find(CurObjectFullName);
-		if (pFileOffset != NULL)
-		{
-			// Seek to the location in the file with the image data
-			FileReader->Seek(*pFileOffset);
-
-			// Load the image data
-			FObjectThumbnail LoadedThumbnail;
-			LoadedThumbnail.Serialize(*FileReader);
-
-			int32 w = LoadedThumbnail.GetImageWidth();
-			int32 h = LoadedThumbnail.GetImageHeight();
-			wcout << "THUMB: " << *CurObjectFullName.ToString() << " " << w << "x" << h << endl;
-
-			if (w * h > 0)
-			{
-				// Store the data!
-				InOutThumbnails.Add(CurObjectFullName, LoadedThumbnail);
-			}
-		}
-		else
-		{
-			// Couldn't find the requested thumbnail in the file!
-		}
-	}
-
-	return true;
-}
-
-
-
-
-
-
 bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString pngPath)
 {
 	UPackage* package = object->GetPackage();
 	FString fullName = object->GetFullName();
 
 	//wcout << "FNAME: |" << *fullName << "|" << endl;
-
-	FObjectThumbnail *f = ThumbnailTools::GetThumbnailForObject(object);
-	if (f)
-		wcout << "ALREADY HAD THUMB!" << endl;
-	else
-		wcout << "FINDING THUMB!" << endl;
 
 	FLinkerLoad* Linker = package->LinkerLoad;
 	if (Linker->SerializeThumbnails(true))
@@ -1575,360 +1447,6 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString p
 	return false;
 }
 
-
-
-
-
-
-
-bool UBlueprintDoxygenCommandlet::CreateThumbnailFile2(UObject *object, FString pngPath)
-{
-	/*
-	//FString AssetPath = object->FSoft
-	FString AssetPath = "";
-	AssetPath = "X:/PixoVR/Documentation_5_0/Plugins/pixo-unreal-documentation/Content/Blueprints/BP_ConnectionTest.uasset";
-
-
-	UObjectLibrary* ObjectLibrary = UObjectLibrary::CreateLibrary(UTexture2D::StaticClass(), false, true);
-	//UObjectLibrary* ObjectLibrary = UObjectLibrary::CreateLibrary(UTexture2D::StaticClass(), true, true);
-
-	ObjectLibrary->AddToRoot();
-	ObjectLibrary->LoadAssetDataFromPath(AssetPath);
-
-	TArray<FAssetData> AssetData;
-	ObjectLibrary->GetAssetDataList(AssetData);
-
-	if (AssetData.Num() > 0)
-	{
-		const FAssetData& FirstAssetData = AssetData[0];
-
-		//FSoftObjectPath ThumbnailObjectPath = FirstAssetData.GetThumbnailSoftPath();
-		FSoftObjectPath ThumbnailObjectPath(object);
-
-		if (UObject* ThumbnailObject = ThumbnailObjectPath.TryLoad())
-		{
-			UTexture2D* ThumbnailImage = Cast<UTexture2D>(ThumbnailObject);
-
-			if (ThumbnailImage)
-			{
-				// Use the thumbnail image as needed
-				wcout << "We have a thumbnail!" << endl;
-				wcout << ThumbnailImage->GetSizeX() << "x" << ThumbnailImage->GetSizeY() << endl;
-			}
-		}
-		else
-			wcout << "NO thumbnail!" << endl;
-	}
-	else
-		wcout << "NO assets!" << endl;
-
-	ObjectLibrary->RemoveFromRoot();
-	ObjectLibrary->ConditionalBeginDestroy();
-
-
-	UThumbnailManager::Get();
-
-	auto tm = UThumbnailManager::Get();
-	//UThumbnailManager* ThumbnailManager = UThumbnailManager::GetIfAvailable();
-	UThumbnailManager ThumbnailManager(UThumbnailManager::Get());
-
-	if (ThumbnailManager)
-	{
-		wcout << "We have a thumbnail manager!" << endl;
-
-		FThumbnailMap map;
-
-	}
-
-	*/
-
-	FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(object) : nullptr;
-	if (RenderInfo)
-		printf("RENDERING INFO!\n");
-	else
-		printf("NO RENDERING INFO!\n");
-
-	//FThumbnailRenderingInfo* RenderInfo = GUnrealEd ? GUnrealEd->GetThumbnailManager()->GetRenderingInfo(object) : nullptr;
-
-	UPackage *package = object->GetPackage();
-	if (package)
-	{
-		wcout << "GOT PACKAGE!" << endl;
-
-		FObjectThumbnail* FoundThumbnail = NULL;
-
-		// We're expecting this to be an outermost package!
-		if (package->GetOutermost() == package)
-			wcout << "PACKAGE is GOOD!" << endl;
-		else
-			wcout << "PACKAGE is BAD!" << endl;
-
-		FString pkgpath = package->GetLoadedPath().GetPackageFName().ToString();
-
-		package->FullyLoad();
-
-		/*
-		// Does the package have any thumbnails?
-		if (InPackage->HasThumbnailMap())
-		{
-			// @todo thumbnails: Backwards compat
-			FThumbnailMap& PackageThumbnailMap = InPackage->AccessThumbnailMap();
-			FoundThumbnail = PackageThumbnailMap.Find(InObjectShortClassFullName);
-		}
-
-		return FoundThumbnail;
-		*/
-
-		if (!package->HasThumbnailMap())
-		{
-			wcout << "PACKAGE needs a map!" << endl;
-			package->SetThumbnailMap(MakeUnique<FThumbnailMap>());
-		}
-
-		package->FullyLoad();
-
-		if (package->HasThumbnailMap())
-		{
-			//const FThumbnailMap m = package->GetThumbnailMap();
-			FThumbnailMap& m = package->AccessThumbnailMap();
-
-			wcout << "MAP: " << m.Num() << " items." << endl;
-		}
-		else
-			wcout << "no map!" << endl;
-	}
-
-	wcout << "Trying to find: " << *object->GetPathName() << endl;
-	wcout << "Trying to find: " << *object->GetFullName() << endl;
-
-	//ThumbnailTools::GetPackageNameForObject(object);
-
-	//if (ThumbnailTools::LoadThumbnailsFromPackage
-	//const FObjectThumbnail* t = ThumbnailTools::FindCachedThumbnail(object->GetPathName());
-	//const FObjectThumbnail* t = ThumbnailTools::FindCachedThumbnail(object->GetFullName());
-
-	//ThumbnailTools::RenderThumbnail
-
-
-	const FObjectThumbnail* t = ThumbnailTools::GetThumbnailForObject(object);
-	if (t)
-	{
-		int32 w = t->GetImageWidth();
-		int32 h = t->GetImageHeight();
-		printf("1 T ObjectThumbnail %d x %d\n", w, h);
-	}
-	else
-		printf("1 No T ObjectThumbnail!\n");
-
-	t = ThumbnailTools::FindCachedThumbnail(object->GetFullName());
-	if (t)
-	{
-		int32 w = t->GetImageWidth();
-		int32 h = t->GetImageHeight();
-		printf("2 T ObjectThumbnail %d x %d\n", w, h);
-	}
-	else
-		printf("2 No T ObjectThumbnail!\n");
-	
-	if(IsAllowCommandletRendering())
-		printf("ALLOW COMMANDLET RENDERING\n");
-	else
-		printf("NO COMMANDLET RENDERING!\n");
-
-	if(GUnrealEd)
-		printf("YES ED\n");
-	else
-		printf("NO ED!\n");
-
-
-	/*
-	if (GUnrealEd)
-		printf("YES, ED\n");
-	else
-		printf("NO, ED\n");
-	*/
-
-	//FRenderResource::InitResource();
-
-	FObjectThumbnail* ObjectThumbnail = ThumbnailTools::GenerateThumbnailForObjectToSaveToDisk(object);
-	if (ObjectThumbnail)
-	{
-		int32 w = ObjectThumbnail->GetImageWidth();
-		int32 h = ObjectThumbnail->GetImageHeight();
-		printf("ObjectThumbnail %d x %d\n", w, h);
-
-		IImageWrapperModule& ImageWrapperModule = FModuleManager::Get().LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
-		TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
-		ImageWrapper->SetRaw(ObjectThumbnail->GetUncompressedImageData().GetData(), ObjectThumbnail->GetUncompressedImageData().Num(), w, h, ERGBFormat::BGRA, 8);
-
-		if (ImageWrapper)
-		{
-			printf("imageWrapper\n");
-			const TArray64<uint8>& CompressedByteArray = ImageWrapper->GetCompressed();
-			if (!FFileHelper::SaveArrayToFile(CompressedByteArray, *pngPath))
-			{	//UE_LOG(LOG_DOT, Error, TEXT("Could not save thumbnail: '%s'."), *pngPath);
-				//return false;
-				printf("saved file!\n");
-			}
-			else
-				printf("no saved file!\n");
-
-			//return true;
-		}
-	}
-	else
-		printf("NO ObjectThumbnail\n");
-
-
-	wcout << "TODO: finish image save.  Don't point to fixed path." << endl;
-
-
-
-
-
-	FString Filename2 = "X:/PixoVR/Documentation_5_0/Plugins/pixo-unreal-documentation/Content/Blueprints/BP_ActorTest.uasset";
-	wcout << "FILE: " << *Filename2 << endl;
-
-	// Create a file reader to load the file                                                         
-	TUniquePtr< FArchive > FileReader(IFileManager::Get().CreateFileReader(*Filename2));
-	if (FileReader == nullptr)
-	{
-		// Couldn't open the file                                                                
-		wcout << "COULDN't open." << endl;
-	}
-	else
-	{
-		// Read package file summary from the file                                                       
-		FPackageFileSummary FileSummary;
-		(*FileReader) << FileSummary;
-
-		// Make sure this is indeed a package                                                            
-		if (FileSummary.Tag != PACKAGE_FILE_TAG || FileReader->IsError())
-		{
-			// Unrecognized or malformed package file                                                
-			wcout << "bad package file " << endl;
-		}
-		else
-		{
-			// Does the package contains a thumbnail table?                                                  
-			if (FileSummary.ThumbnailTableOffset == 0)
-			{
-				// No thumbnails to be loaded                                                            
-				wcout << "NO THUMBNAILS!" << endl;
-			}
-			else
-			{
-				wcout << "HAS THUMBNAILS!" << endl;
-
-				int32 LastFileOffset = -1;
-				// Load the thumbnail table of contents              
-				TMap< FName, int32 > ObjectNameToFileOffsetMap;
-				{
-					// Load the thumbnail count                  
-					int32 ThumbnailCount = 0;
-					*FileReader << ThumbnailCount;
-					wcout << ThumbnailCount << " thumbs." << endl;
-				}
-			}
-		}
-	}
-
-	wcout << "=======================" << endl;
-
-	//TArray<FName> thumbs;
-	//TSet<FName> InObjectFullNames;
-	FThumbnailMap InOutThumbnails;
-
-	bool ltfp = LoadThumbnailsFromPackageInternal(Filename2, InOutThumbnails);
-	if (ltfp)
-		wcout << "LOADED from " << *Filename2 << endl;
-	else
-		wcout << "FAILED LOAD from " << *Filename2 << endl;
-
-	wcout << "=======================" << endl;
-
-	return true;
-
-
-
-	FLinkerLoad* Linker = nullptr;
-	UPackage* Package = nullptr;
-	//FArchiveStackTraceReader* Reader = nullptr;
-
-	FString Filename = "X:/PixoVR/Documentation_5_0/Plugins/pixo-unreal-documentation/Content/Materials/Material_Test.uasset";
-	wcout << "FILE: " << *Filename << endl;
-
-	//Filename = "C:/Program Files/Epic Games/UE_5.0/Engine/Content/Animation/DefaultAnimBoneCompressionSettings.uasset";
-
-	TGuardValue<int32> GuardAllowUnversionedContentInEditor(GAllowUnversionedContentInEditor, 1);
-	TGuardValue<int32> GuardAllowCookedContentInEditor(GAllowCookedDataInEditorBuilds, 1);
-	TRefCountPtr<FUObjectSerializeContext> LoadContext(FUObjectThreadContext::Get().GetSerializeContext());
-	BeginLoad(LoadContext);
-	Linker = CreateLinkerForFilename(LoadContext, Filename);
-	EndLoad(Linker ? Linker->GetSerializeContext() : LoadContext.GetReference());
-	FName LinkerName = Linker->LinkerRoot->GetFName();
-
-	if (Linker->SerializeThumbnails(true))
-	{
-		if (Linker->LinkerRoot->HasThumbnailMap())
-		{
-			FThumbnailMap& LinkerThumbnails = Linker->LinkerRoot->AccessThumbnailMap();
-
-			int32 MaxObjectNameSize = 0;
-			for (TMap<FName, FObjectThumbnail>::TIterator It(LinkerThumbnails); It; ++It)
-			{
-				FName& ObjectPathName = It.Key();
-				MaxObjectNameSize = FMath::Max(MaxObjectNameSize, ObjectPathName.ToString().Len());
-			}
-
-			int32 ThumbIdx = 0;
-			for (TMap<FName, FObjectThumbnail>::TIterator It(LinkerThumbnails); It; ++It)
-			{
-				FName& ObjectFullName = It.Key();
-				FObjectThumbnail& Thumb = It.Value();
-
-				int32 w = Thumb.GetImageWidth();
-				int32 h = Thumb.GetImageHeight();
-
-				//UE_LOG(LOG_DOT, Display, TEXT("\t\t%i) %*s: %ix%i\t\tImage Data:%i bytes"), ThumbIdx++, MaxObjectNameSize, *ObjectFullName.ToString(), w, h, Thumb.GetCompressedDataSize());
-
-				//printf("ObjectThumbnail %d x %d\n", w, h);
-
-				IImageWrapperModule& ImageWrapperModule = FModuleManager::Get().LoadModuleChecked<IImageWrapperModule>(TEXT("ImageWrapper"));
-				TSharedPtr<IImageWrapper> ImageWrapper = ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG);
-				ImageWrapper->SetRaw(Thumb.GetUncompressedImageData().GetData(), Thumb.GetUncompressedImageData().Num(), w, h, ERGBFormat::BGRA, 8);
-
-				if (ImageWrapper)
-				{
-					//printf("imageWrapper\n");
-					const TArray64<uint8>& CompressedByteArray = ImageWrapper->GetCompressed();
-					if (!FFileHelper::SaveArrayToFile(CompressedByteArray, *pngPath))
-					{	//UE_LOG(LOG_DOT, Error, TEXT("Could not save thumbnail: '%s'."), *pngPath);
-						return false;
-					}
-
-					wcout << "Writing to " << *pngPath << endl;
-
-					return true;
-				}
-			}
-		}
-		else
-		{
-			UE_LOG(LOG_DOT, Warning, TEXT("%s has no thumbnail map!"), *LinkerName.ToString());
-		}
-	}
-	else
-	{
-		if (Linker->Summary.ThumbnailTableOffset > 0)
-		{
-			UE_LOG(LOG_DOT, Warning, TEXT("Failed to load thumbnails for package %s!"), *LinkerName.ToString());
-		}
-	}
-
-	return false;
-}
-
 void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 	UBlueprint *blueprint,
 	FString group,
@@ -1953,15 +1471,21 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 		//	||	!CreateThumbnailFile(blueprint->ParentClass, pngPath)
 		)
 		{
-			UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
+			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
+			wcout << "Not created: " << *pngPath << endl;
 		}
 		else
 		{
-			//FString fmt = "![{1}]({0}){}";
-			//FString fmt = "![{1}]: {0}";
 			int width = 256;
-			FString fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
+			FString fmt;
+
+			fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
 			imagetag = FString::Format(*fmt, { pngName, className, width });
+
+			// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
+			fmt = "\\link {0} &thinsp; \\image html {0}.png \"{0}\" width={1}px \\endlink";
+			FString galleryEntry = FString::Format(*fmt, { className, width });
+			GalleryList.Add(galleryEntry);
 		}
 	}
 

@@ -24,13 +24,9 @@ build:
 	cmd.exe /k $(WUE_ENGINE)\\$(UATCMD) BuildPlugin -plugin="$(PLUGIN)" -package="$(PACKAGE)" -TargetPlatforms=$(PLATFORM) && exit || exit
 
 run:
-	cd "$(UE_ENGINE)" && \
-	$(UECMD) "$(PROJECT)" -run=$(COMMANDLET) $(LOGGING) -OutputMode=doxygen -OutputDir="$(OUTPUT_DIR)" || \
-	true
+	cd "$(UE_ENGINE)" && $(UECMD) "$(PROJECT)" -run=$(COMMANDLET) $(LOGGING) -OutputMode=doxygen -OutputDir="$(OUTPUT_DIR)" || true
 
 verbose:
-	cd "$(UE_ENGINE)" && \
-	$(UECMD) "$(PROJECT)" -run=$(COMMANDLET) $(LOGGING) -OutputMode=verbose -OutputDir="$(OUTPUT_DIR)" || \
-	true
+	cd "$(UE_ENGINE)" && $(UECMD) "$(PROJECT)" -run=$(COMMANDLET) $(LOGGING) -OutputMode=verbose -OutputDir="$(OUTPUT_DIR)" || true
 
 
