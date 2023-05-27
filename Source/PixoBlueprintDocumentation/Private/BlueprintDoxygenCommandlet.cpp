@@ -343,8 +343,7 @@ void UBlueprintDoxygenCommandlet::ReportGroup(FString groupName, FString groupNa
 	\brief {2}
 
 {3}
-{4}
-*/)PixoVR");
+{4}*/)PixoVR");
 
 	FString gallery = "";
 
@@ -352,14 +351,14 @@ void UBlueprintDoxygenCommandlet::ReportGroup(FString groupName, FString groupNa
 	{
 		FString galleryItems;
 
+		GalleryList.Sort();		//alphabetize the gallery
 		for (FString e : GalleryList)
 		{	galleryItems += "	" + e + "\n";	}
 
 		FString gtmpl(R"PixoVR(
 	<h2 class='groupheader'>Gallery</h2>
 	<div class='gallery'>
-{0}
-	</div>
+{0}	</div>
 )PixoVR");
 
 		gallery = FString::Format(*gtmpl, { galleryItems });
@@ -413,19 +412,20 @@ void UBlueprintDoxygenCommandlet::ReportBlueprints()
 			else
 			{
 				ReportBlueprint(_tab, LoadedBlueprint);
-				ReportGroup(
-					"blueprints",
-					"Blueprints",
-					"Blueprints found in the **$(PROJECT_NAME)** library.",
-				"	The blueprint system may contain multiple graph classes(Event Graph, Construction Graph, etc)\n"
-				"	per blueprint, and each graph may contain subgraphs.  Links to subgraphs can be accessed by\n"
-				"	clicking on their collapsed node or by navigating to the additional entries in the class."
-				);
 			}
 		}
 		else
 			TotalBlueprintsIgnored++;
 	}
+
+	ReportGroup(
+		"blueprints",
+		"Blueprints",
+		"Blueprints found in the **$(PROJECT_NAME)** library.",
+		"	The blueprint system may contain multiple graph classes(Event Graph, Construction Graph, etc)\n"
+		"	per blueprint, and each graph may contain subgraphs.  Links to subgraphs can be accessed by\n"
+		"	clicking on their collapsed node or by navigating to the additional entries in the class."
+	);
 }
 
 void UBlueprintDoxygenCommandlet::ReportMaterials()
@@ -482,7 +482,6 @@ void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, UBlueprint* bl
 	FString path, subDir;
 
 	//TODO is this useful?
-	bool isDataOnlyBlueprint = FBlueprintEditorUtils::IsDataOnlyBlueprint(blueprint);
 	bool isLevelScriptBlueprint = FBlueprintEditorUtils::IsLevelScriptBlueprint(blueprint);
 	//bool isParentClassABlueprint = FBlueprintEditorUtils::IsParentClassABlueprint(blueprint);
 	
@@ -948,7 +947,13 @@ bool UBlueprintDoxygenCommandlet::OpenFile(FString fpath, bool append)
 	if (stream->is_open())
 	{
 		out = outfile = stream;
-		wcout << "Writing to " << *fpath << endl;
+
+		FString tpath = fpath;
+		tpath.RemoveFromStart(outputDir);
+		tpath = "[OutputDir]" + tpath;
+
+		//wcout << "Writing to " << *fpath << endl;
+		wcout << "Writing to " << *tpath << endl;
 	}
 	else
 	{
@@ -1426,7 +1431,11 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString p
 
 					if (ImageWrapper)
 					{
-						wcout << "Writing to " << *pngPath << endl;
+						FString tpngPath = pngPath;
+						tpngPath.RemoveFromStart(outputDir);
+						tpngPath = "[OutputDir]" + tpngPath;
+
+						wcout << "Writing to " << *tpngPath << endl;
 
 						const TArray64<uint8>& CompressedByteArray = ImageWrapper->GetCompressed();
 						if (!FFileHelper::SaveArrayToFile(CompressedByteArray, *pngPath))
@@ -1458,6 +1467,7 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 	FString className = GetClassName(blueprint->GeneratedClass);
 	FString parentClass = GetClassName(blueprint->ParentClass);
 	
+	bool isDataOnly = FBlueprintEditorUtils::IsDataOnlyBlueprint(blueprint);
 	FString imagetag = "";
 
 	if (outputDir != "-")
@@ -1466,13 +1476,18 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 		FString pngName = className + ".png";
 		FString pngPath = currentDir + "\\" + pngName;
 		FPaths::MakePlatformFilename(pngPath);
+
 		if (
 				!CreateThumbnailFile(blueprint, pngPath)
 		//	||	!CreateThumbnailFile(blueprint->ParentClass, pngPath)
 		)
 		{
+			FString tpngPath = pngPath;
+			tpngPath.RemoveFromStart(outputDir);
+			tpngPath = "[OutputDir]" + tpngPath;
+
 			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			wcout << "Not created: " << *pngPath << endl;
+			wcout << "No image:  " << *tpngPath << endl;
 		}
 		else
 		{
@@ -1483,8 +1498,8 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 			imagetag = FString::Format(*fmt, { pngName, className, width });
 
 			// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
-			fmt = "\\link {0} &thinsp; \\image html {0}.png \"{0}\" width={1}px \\endlink";
-			FString galleryEntry = FString::Format(*fmt, { className, width });
+			fmt = "\\link {1} &thinsp; \\image html {0} \"{1}\" width={2}px \\endlink";
+			FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
 			GalleryList.Add(galleryEntry);
 		}
 	}
@@ -1523,16 +1538,22 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 
 	//*out << "	\\brief UDF Path: <b>" << *packageName << "</b> "<< endl;
 	*out << "	\\brief A blueprint class with " << graphCount << " graphs." << endl;
-	
-	if (!imagetag.IsEmpty())
+	*out << endl;
+
+	if (!imagetag.IsEmpty())					//floats right... needs to be as early in the description as possible.
 		*out << "	" << *imagetag << endl;
 
 	*out << "	UDF Path: <b>" << *packageNameBreaks << "</b>" << endl;
 	*out << "	<br/>Config: <b>" << *config << "</b>" << endl;
+
 	if (!displayName.IsEmpty())
 		*out << "	<br/>Display Name: <b>" << *displayName << "</b>" << endl;
-	*out << "	" << endl;
-	*out << "	" << *description << endl;
+	if (isDataOnly)
+		*out << "	This blueprint is <b>Data Only</b>" << endl;
+	if (!description.IsEmpty())
+	{	*out << "	" << endl;
+		*out << "	" << *description << endl;
+	}
 
 	*out << "	<div style='clear:both;'/>" << endl;
 
@@ -1576,7 +1597,7 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	}
 
 	// Gives the line places to break if needed.
-	// TODO: (actually turns our doxygen won't do it, so left this here with
+	// TODO: (actually turns out doxygen won't do it, so left this here with
 	// &thinsp; for when I do figure out how to do it with &#8203;)
 	FString packageNameBreaks = packageName.Replace(TEXT("/"), TEXT("&thinsp;/"));
 	//packageName = packageName.Replace(TEXT("/"), TEXT("&zwnj;/"));
