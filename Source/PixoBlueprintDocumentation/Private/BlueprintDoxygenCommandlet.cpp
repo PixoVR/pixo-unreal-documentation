@@ -1517,19 +1517,15 @@ bool LoadThumbnailsFromPackageInternal(const FString& InPackageFileName, FThumbn
 bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString pngPath)
 {
 	UPackage* package = object->GetPackage();
-
 	FString fullName = object->GetFullName();
-	wcout << "FNAME: |" << *fullName << "|" << endl;
 
-	/*
-	FString fullName2 = object->GetFName().ToString();
-	FString fullName3 = object->GetPathName();
-	FString fullName4 = object->GetClass()->GetName();
+	//wcout << "FNAME: |" << *fullName << "|" << endl;
 
-	FString fullName5 = *UClass::ConvertFullNameToShortTypeFullName(fullName);
-
-	wcout << "FNAME: " << *fullName << "\n" << *fullName2 << "\n" << *fullName3 << "\n" << *fullName4 << " \n " << *fullName5 << endl;
-	*/
+	FObjectThumbnail *f = ThumbnailTools::GetThumbnailForObject(object);
+	if (f)
+		wcout << "ALREADY HAD THUMB!" << endl;
+	else
+		wcout << "FINDING THUMB!" << endl;
 
 	FLinkerLoad* Linker = package->LinkerLoad;
 	if (Linker->SerializeThumbnails(true))
