@@ -42,9 +42,6 @@ class UBlueprintDoxygenCommandlet : public UCommandlet
 	virtual int32 Main(const FString& Params) override;
 	// End UCommandlet Interface
 
-	//yeah man	//TODO: remove or fix!
-	//virtual void CreateCustomEngine(const FString& Params);
-
 protected:
 
 	typedef TMap<FString, FString> vmap;	//name value pairs
@@ -110,7 +107,7 @@ protected:
 	virtual void ReportBlueprint(FString prefix, UBlueprint* Blueprint);
 
 	virtual void ReportMaterials();
-	virtual void ReportMaterial(FString prefix, FString assetName, UMaterial* Material);
+	virtual void ReportMaterial(FString prefix, FString assetName, UMaterialInterface* materialInterface);
 
 	virtual void ReportGraph(FString prefix, UEdGraph* Graph);
 	virtual void ReportNode(FString prefix, UEdGraphNode* Node);
@@ -121,11 +118,10 @@ protected:
 	virtual bool OpenFile(FString fpath, bool append=false);
 	virtual bool CloseFile();
 	bool CreateThumbnailFile(UObject *object, FString pngPath);
-	bool CreateThumbnailFile2(UObject* object, FString pngPath);	//TODO: remove this
 	FString GetTrimmedConfigFilePath(FString path);
 
 	//blueprint stuff
-	FString GetClassName(UClass* blueprint);
+	FString GetClassName(UClass* _class);
 	FString GetGraphCPP(UEdGraph* graph, FString _namespace="");
 
 	//node stuff
@@ -185,6 +181,7 @@ protected:
 	TArray<FString> GroupList;
 
 	// material stuff
+	// TODO: cleanup
 	void addAllGraphs(TArray<UEdGraph*> &container, TArray<UEdGraph*> &graphs);
 
 	// doxygen output
@@ -198,7 +195,7 @@ protected:
 	void writeAssetCalls();
 
 	void writeBlueprintHeader(UBlueprint *blueprint, FString group, FString qualifier, FString packageName, int graphCount);
-	void writeMaterialHeader(UMaterial* material, FString group, FString qualifier, FString assetName, FString packageName, FString packageDescription, FString parentClass, int graphCount);
+	void writeMaterialHeader(UMaterialInterface* material, FString group, FString qualifier, FString packageName, int graphCount);
 
 	void writeGraphHeader(FString prefix, UEdGraph *graph, FString qualifier);
 	void writeGraphFooter(FString prefix, UEdGraph *graph);

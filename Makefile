@@ -8,6 +8,7 @@ COMMANDLET = BlueprintDoxygen
 PROJECT = X:\PixoVR\Documentation_5_0\Documentation_5_0.uproject
 LOGGING = -LogCmds="global none, LOG_DOT all" -NoLogTimes
 OUTPUT_DIR = X:\PixoVR\documentation\docs-root\documentation\pages\blueprints2
+OUTPUT_MODE ?= doxygen
 
 # build
 UATCMD = Build\\BatchFiles\\RunUAT.bat
@@ -17,16 +18,20 @@ PLATFORM = Win64
 #PACKAGE = X:\\PixoVR\\dev\\SDKs\\temp
 PACKAGE = C:\\temp\\build
 
-
-all: build run
+all: run
 
 build:
-	cmd.exe /k $(WUE_ENGINE)\\$(UATCMD) BuildPlugin -plugin="$(PLUGIN)" -package="$(PACKAGE)" -TargetPlatforms=$(PLATFORM) && exit || exit
+	@cmd.exe /k $(WUE_ENGINE)\\$(UATCMD) BuildPlugin -plugin="$(PLUGIN)" -package="$(PACKAGE)" -TargetPlatforms=$(PLATFORM) && exit || exit
 
 run:
-	cd "$(UE_ENGINE)" && $(UECMD) "$(PROJECT)" -run=$(COMMANDLET) $(LOGGING) -OutputMode=doxygen -OutputDir="$(OUTPUT_DIR)" || true
+	@make commandlet OUTPUT_MODE=doxygen
+
+debug:
+	@make commandlet OUTPUT_MODE=debug 
 
 verbose:
-	cd "$(UE_ENGINE)" && $(UECMD) "$(PROJECT)" -run=$(COMMANDLET) $(LOGGING) -OutputMode=verbose -OutputDir="$(OUTPUT_DIR)" || true
+	@make commandlet OUTPUT_MODE=verbose
 
+commandlet:
+	@cd "$(UE_ENGINE)" && $(UECMD) "$(PROJECT)" -run=$(COMMANDLET) $(LOGGING) -OutputMode=$(OUTPUT_MODE) -OutputDir="$(OUTPUT_DIR)" || true
 
