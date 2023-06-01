@@ -12,9 +12,6 @@
 #include "Misc/Paths.h"
 #include "Internationalization/Regex.h"
 
-#include "EdGraphNode_Comment.h"
-#include "EdGraphSchema_K2.h"
-
 #include "K2Node.h"
 #include "K2Node_Composite.h"
 #include "K2Node_Variable.h"
@@ -28,8 +25,16 @@
 
 #include "Kismet2/BlueprintEditorUtils.h"
 
+#include "EdGraphNode_Comment.h"
+#include "EdGraphSchema_K2.h"
+
 #include "MaterialGraph/MaterialGraph.h"
 #include "MaterialGraph/MaterialGraphSchema.h"
+#include "MaterialGraph/MaterialGraphNode_Composite.h"
+#include "MaterialGraph/MaterialGraphNode_PinBase.h"
+#include "MaterialGraph/MaterialGraphNode_Root.h"
+#include "Materials/MaterialInstance.h"
+#include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialExpressionComment.h"
 
 #include "Engine/ObjectLibrary.h"
@@ -41,6 +46,8 @@
 
 #include "Editor/UnrealEdEngine.h"
 #include "Editor/EditorEngine.h"
+
+FString htmlentities(FString in);
 
 extern UNREALED_API UUnrealEdEngine* GUnrealEd;
 extern UNREALED_API UEditorEngine* GEditor;
@@ -90,7 +97,7 @@ UBlueprintDoxygenCommandlet::UBlueprintDoxygenCommandlet(const FObjectInitialize
 	BlueprintStyle.Add("_PINURL_", "");
 	BlueprintStyle.Add("_CELLPADDING_", "3");
 	BlueprintStyle.Add("_COMMENTPADDING_", "7");
-	BlueprintStyle.Add("_COMPOSITEPADDING_", "5");
+	BlueprintStyle.Add("_COMPOSITEPADDING_", "4");		// 5 ?
 	BlueprintStyle.Add("_COMPACTCOLOR_", "#888888");
 
 	BlueprintStyle.Add("_HEIGHTSPACER_", "<font color=\"transparent\" point-size=\"12\">|</font>");
@@ -552,7 +559,7 @@ void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, UBlueprint* bl
 	if (outputMode & doxygen)
 	{
 		writeBlueprintHeader(blueprint, "blueprints", "Blueprint", package->GetName(), graphs.Num());
-		writeAssetMembers(blueprint, "Blueprint");
+		writeBlueprintMembers(blueprint, "Blueprint");
 
 		if (graphs.Num())
 		{	
@@ -595,10 +602,12 @@ void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, UBlueprint* bl
 
 void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetName, UMaterialInterface* materialInterface)
 {
+	currentMaterialInterface = materialInterface;
 	const UPackage* package = materialInterface->GetPackage();
 	UMaterial* material = materialInterface->GetMaterial();
 	FString className = materialInterface->GetName();
 	FString path, subDir;
+	FString imageTag = "";
 
 	//each material will have different graphs.  This is just to save some memory on a large build.
 	GraphDescriptions.Empty();
@@ -606,16 +615,8 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 	//each graph will make calls to nodes and variables.  Clear these before we report each blueprint.
 	GraphCalls.Empty();
 
-	if (outputMode & debug)
+	if (outputMode & verbose)
 	{
-		//TODO: delete this
-		//FString parentClass = material->GetFName().ToString();
-		//FString parentClass = UMaterial::StaticClass()->GetFName().ToString();
-		//material->GetClass();
-
-		//UMaterial* baseMaterial = material->GetBaseMaterial();			// we're kind of assuming that there's not many (any) parent classes above this.
-		//FString parentClass = baseMaterial->GetFName().ToString();
-
 		UClass* parent = material->GetBaseMaterial()->GetClass();
 		//UClass* parent = material->StaticClass();// ->GetSuperClass();
 		FString parentClass = GetClassName(parent);
@@ -659,94 +660,62 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 			return;
 		}
 
+		//create image, if possible
+		FString pngName = className + ".png";
+		FString pngPath = currentDir + "\\" + pngName;
+		FPaths::MakePlatformFilename(pngPath);
 
+		if (!CreateThumbnailFile(materialInterface, pngPath))
+		{
+			FString tpngPath = pngPath;
+			tpngPath.RemoveFromStart(outputDir);
+			tpngPath = "[OutputDir]" + tpngPath;
 
+			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
+			wcout << "No image:  " << *tpngPath << endl;
+		}
+		else
+		{
+			int width = 256;
+			FString fmt;
+
+			fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
+			imageTag = FString::Format(*fmt, { pngName, className, width });
+
+			// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
+			fmt = "\\link {1} &thinsp; \\image html {0} \"{1}\" width={2}px \\endlink";
+			FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
+			GalleryList.Add(galleryEntry);
+		}
 	}
-
-	//wcout << "about to build parameter list..." << endl;
-	//material->BuildEditorParameterList();
-	//wcout << "built parameter list." << endl;
-
-	//UEdGraphNode* root = material->MaterialGraph->RootNode;
 
 	TArray<UEdGraph*> graphs;
-	//UEdGraph* graph = material->MaterialGraph;
-	UEdGraph* graph = material->MaterialGraph;
 
+	//UEdGraph* graph = material->MaterialGraph;
+	UMaterialGraph* graph = material->MaterialGraph;
 	if (!graph)
 	{
-		wcout << "creating graph..." << endl;
-		graph = material->MaterialGraph = CastChecked<UMaterialGraph>(FBlueprintEditorUtils::CreateNewGraph(material, NAME_None, UMaterialGraph::StaticClass(), UMaterialGraphSchema::StaticClass()));
-
+		//graph = material->MaterialGraph = CastChecked<UMaterialGraph>(FBlueprintEditorUtils::CreateNewGraph(material, NAME_None, UMaterialGraph::StaticClass(), UMaterialGraphSchema::StaticClass()));
+		graph = material->MaterialGraph = CastChecked<UMaterialGraph>(FBlueprintEditorUtils::CreateNewGraph(material, FName(*className), UMaterialGraph::StaticClass(), UMaterialGraphSchema::StaticClass()));
 		material->MaterialGraph->Material = material;
-		//material->MaterialGraph->MaterialFunction = material->materialFunc
+		//material->MaterialGraph->RootNode = material->root						//NO?
+		//material->MaterialGraph->MaterialFunction = material->materialFunction;	//NOT POSSIBLE!
 		material->MaterialGraph->RebuildGraph();
-		wcout << "rebuilt!" << endl;
-
+		//material->MaterialGraph->RootNode->ReconstructNode();
+		//material->MaterialGraph->RootNode->CreateInputPins();						//will duplicate pins!
+		//graph->OriginalMaterialFullName;
 	}
-
-	wcout << "have graph: " << *graph->GetFName().ToString() << endl;
-
-	wcout << *assetName << " has " << graph->Nodes.Num() << " nodes." << endl;
 
 	graphs.Add(graph);
 	addAllGraphs(graphs, graph->SubGraphs);
 
-	wcout << *assetName << " has " << graphs.Num() << " graphs in it." << endl;
-
-	/*
-	TArray< UMaterialExpression*> expressions;
-	material->GetAllReferencedExpressions(expressions, 0);
-	//expression->GetAllInputExpressions
-
-	wcout << *assetName << " has " << expressions.Num() << " expressions in it." << endl;
-
-	for (UMaterialExpression* expression : expressions)
-	{
-		wcout << *expression->GetName() << " :: " << *expression->GetDescription() << " || " << *expression->Desc << endl;
-		if (expression->GraphNode)
-			wcout << "   " << *expression->GraphNode->GetNodeTitle(ENodeTitleType::FullTitle).ToString() << endl;
-		//expression->GetExpressionToolTip
-		//expression->GraphNode;
-		//expression->GetDesc
-		//expression->GetDescription
-		//expression->GetConnectorToolTip
-	}
-	*/
-
-	//TODO comments!
-
-	/*
-	//COMMENTS
-	TArray<UMaterialExpressionComment *> comments = material->EditorComments;
-	for (UMaterialExpressionComment* comment : comments)
-	{
-		//comment->bCommentBubbleVisible
-		//comment->bCollapsed
-
-		//comment->CommentColor;
-		//comment->GetCaption
-		//comment->Text
-
-		wcout << *comment->GetName() << " :: " << *comment->Text << endl;
-	}
-	*/
-
-
 	if (outputMode & verbose)
 		UE_LOG(LOG_DOT, Display, TEXT("%sFound %d graph%s..."), *prefix, graphs.Num(), graphs.Num() != 1 ? "s" : "");
 
-	//EMaterialProperty::
-	//FString graph->OriginalMaterialFullName
-	//TODO MaterialInputs !! should list as parameters of this class
-	printf("TODO: LIST MATERIAL INPUTS HERE!\n");
-
 	if (outputMode & doxygen)
 	{
-		wcout << "TODO: get material graphs num." << endl;
-		writeMaterialHeader(materialInterface, "materials", "Material", package->GetName(), graphs.Num());
-		//TODO
-		//writeAssetMembers(material, "Material");
+		writeMaterialHeader(materialInterface, "materials", "Material", package->GetName(), imageTag, graphs.Num());
+		writeMaterialMembers(material, "Material");
 
 		if (graphs.Num())
 		{
@@ -776,15 +745,14 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 		path = currentDir + "/" + className + ".cpp";
 		FPaths::MakePlatformFilename(path);				//clean slashes
 		if (!OpenFile(path))
-		{
-			UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
-			return;
-		}
-
-		writeAssetCalls();
+		{	UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);	}
+		else
+			writeAssetCalls();
 
 		CloseFile();		//close .cpp file
 	}
+
+	currentMaterialInterface = NULL;
 }
 
 //TODO: cleanup
@@ -863,10 +831,33 @@ void UBlueprintDoxygenCommandlet::ReportNode(FString prefix, UEdGraphNode* n)
 	if (subgraph_node)
 	{
 		UEdGraph *subgraph = subgraph_node->BoundGraph;
-		FString brief = subgraph_node->GetTooltipText().ToString().TrimStartAndEnd();
+		//FString brief = subgraph_node->GetDesc().TrimStartAndEnd();
+		//FString brief = subgraph_node->GetTooltipText().ToString().TrimStartAndEnd();
+		FString brief = FBlueprintEditorUtils::GetGraphDescription(subgraph).ToString();
+		brief = brief.Replace(TEXT("\r"), TEXT(""));
+		//brief = brief.Replace(TEXT("\n"), TEXT("&#013;"));
+		brief = brief.Replace(TEXT("\n"), TEXT(" "));
+
 		GraphDescriptions.Add(subgraph, brief);
 	}
-	
+
+	UMaterialGraphNode_Composite* subgraph_materialnode = dynamic_cast<UMaterialGraphNode_Composite*>(n);
+	if (subgraph_materialnode)
+	{
+		UEdGraph* subgraph = subgraph_materialnode->BoundGraph;
+		//FString brief = subgraph_materialnode->GetDesc().TrimStartAndEnd();
+		FString brief = subgraph_materialnode->GetTooltipText().ToString().TrimStartAndEnd();
+		TArray<FString> tips;
+		subgraph_materialnode->MaterialExpression->GetExpressionToolTip(tips);
+		if (tips.Num() > 1)
+			brief = tips[1].TrimStartAndEnd();
+		brief = brief.Replace(TEXT("\r"), TEXT(""));
+		//brief = brief.Replace(TEXT("\n"), TEXT("&#013;"));
+		brief = brief.Replace(TEXT("\n"), TEXT(" "));
+
+		GraphDescriptions.Add(subgraph, brief);
+	}
+
 	if (outputMode & debug)
 	{
 		FLinearColor titleColor = n->GetNodeTitleColor();
@@ -920,8 +911,7 @@ void UBlueprintDoxygenCommandlet::ReportNode(FString prefix, UEdGraphNode* n)
 
 		if (pins.Num() > 0)
 		{
-			if (outputMode & debug)
-			{	UE_LOG(LOG_DOT, Display, TEXT("%spins (%d):"), *prefix2, pins.Num());	}
+			UE_LOG(LOG_DOT, Display, TEXT("%spins (%d):"), *prefix2, pins.Num());
 
 			for (UEdGraphPin* p : pins)
 			{
@@ -1053,9 +1043,36 @@ FString UBlueprintDoxygenCommandlet::GetTrimmedConfigFilePath(FString path)
 	return trimmed;
 }
 
-// straight up copied from SGraphNode.cpp
-bool UBlueprintDoxygenCommandlet::PinShouldBeVisible(UEdGraphPin* InPin)
+TMap<FString, FString> UBlueprintDoxygenCommandlet::GetVisiblePins(UEdGraphNode* node)
 {
+	TMap<FString, FString> visiblePins;								// if empty, all pins are allowed.  Otherwise only these pins are allowed.  This is set during node reporting.
+	UMaterialGraphNode_Root* materialRoot = dynamic_cast<UMaterialGraphNode_Root*>(node);
+	if (materialRoot)
+	{
+		//filter parameters of this node/material/class
+		UMaterial* material = materialRoot->Material;
+		TArray<FMaterialInputInfo> minfo = material->MaterialGraph->MaterialInputs;
+		for (FMaterialInputInfo info : minfo)
+		{
+			//wcout << *info.GetName().ToString() << " :: " << (info.IsVisiblePin(material) ? "true" : "false") << " :: " << *info.GetToolTip().ToString() << endl;
+			if (info.IsVisiblePin(material))
+				visiblePins.Add({ info.GetName().ToString(), info.GetToolTip().ToString() });
+		}
+	}
+
+	return visiblePins;
+}
+
+// straight up copied from SGraphNode.cpp
+bool UBlueprintDoxygenCommandlet::PinShouldBeVisible(UEdGraphPin* InPin, TMap<FString, FString> visiblePins)
+{
+	if (visiblePins.Num())
+	{
+		FString nm = GetPinLabel(InPin);
+		if (!visiblePins.Contains(nm))
+			return false;
+	}
+
 	bool bHideNoConnectionPins = false;
 	bool bHideNoConnectionNoDefaultPins = false;
 
@@ -1063,7 +1080,6 @@ bool UBlueprintDoxygenCommandlet::PinShouldBeVisible(UEdGraphPin* InPin)
 	const bool bCanHidePin = (InPin->PinType.PinCategory != UEdGraphSchema_K2::PC_Exec);
 
 	//if (OwnerGraphPanelPtr.IsValid() && bCanHidePin)
-	//if (true && bCanHidePin)
 	//{
 		//bHideNoConnectionPins = OwnerGraphPanelPtr.Pin()->GetPinVisibility() == SGraphEditor::Pin_HideNoConnection;
 		//bHideNoConnectionNoDefaultPins = OwnerGraphPanelPtr.Pin()->GetPinVisibility() == SGraphEditor::Pin_HideNoConnectionNoDefault;
@@ -1111,15 +1127,25 @@ FString UBlueprintDoxygenCommandlet::GetPinLabel(UEdGraphPin* p)
 	return n;
 }
 
-FString UBlueprintDoxygenCommandlet::GetPinTooltip(UEdGraphPin* p)
+FString UBlueprintDoxygenCommandlet::GetPinTooltip(UEdGraphPin* p, TMap<FString,FString>visiblePins)
 {
-	UEdGraphNode* n = p->GetOwningNode();
 	FString hover;
+	UEdGraphNode* n = p->GetOwningNode();
 	n->GetPinHoverText(*p, hover);
+
+	if (visiblePins.Num())
+	{
+		FString nm = GetPinLabel(p);
+		if (visiblePins.Contains(nm))
+			hover = visiblePins[nm];
+	}
+
 	hover = hover.TrimStartAndEnd();
 	hover = hover.Replace(TEXT("\r"), TEXT(""));
-	hover = hover.Replace(TEXT("\n"), TEXT("&#013;"));
-	hover = hover.Replace(TEXT("\\"), TEXT("\\\\"));
+	hover = htmlentities(hover);
+	//hover = hover.Replace(TEXT("\n"), TEXT("&#013;"));
+	//hover = hover.Replace(TEXT("\\"), TEXT("\\\\"));
+	//hover = hover.Replace(TEXT("\""), TEXT("\\\""));
 	return hover;
 }
 
@@ -1326,7 +1352,9 @@ FString htmlentities(FString in)
 	FString out;
 	for (int i = 0; i < in.Len(); i++)
 	{
-		if (in[i] > 127)
+		if (in[i] == '"')			//34
+			out += TEXT("&quot;");
+		else if (in[i] > 127)
 			out += FString::Printf(TEXT("&#%d;"), (int)in[i]);
 		else
 			out += in[i];
@@ -1624,48 +1652,30 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	FString group,
 	FString qualifier,
 	FString packageName,
+	FString imageTag,
 	int graphCount
 )
 {
 	UMaterial* material = materialInterface->GetMaterial();
+	UMaterialInstanceDynamic* materialInstance = dynamic_cast<UMaterialInstanceDynamic *>(material);
 	FString className = materialInterface->GetName();
 
-	UClass* parent = material->GetBaseMaterial()->GetClass();
+	UClass* parent;
+	if (materialInstance)
+	{
+		UMaterialInterface *p = materialInstance->Parent;
+		parent = p->GetClass();
+		//parent = materialInstance->GetClass();
+	}
+	else
+	{
+		//UClass* parent = material->GetBaseMaterial()->GetClass();
+		parent = material->GetClass();
+	}
+
 	FString parentClass = GetClassName(parent);
 	//FMaterialInheritanceChain chain;
 	//material->GetMaterialInheritanceChain(chain);
-
-	FString imagetag = "";
-	if (outputDir != "-")
-	{
-		//FGenericPlatformMisc::GetDefaultPathSeparator()
-		FString pngName = className + ".png";
-		FString pngPath = currentDir + "\\" + pngName;
-		FPaths::MakePlatformFilename(pngPath);
-
-		if (!CreateThumbnailFile(materialInterface, pngPath))
-		{
-			FString tpngPath = pngPath;
-			tpngPath.RemoveFromStart(outputDir);
-			tpngPath = "[OutputDir]" + tpngPath;
-
-			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			wcout << "No image:  " << *tpngPath << endl;
-		}
-		else
-		{
-			int width = 256;
-			FString fmt;
-
-			fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
-			imagetag = FString::Format(*fmt, { pngName, className, width });
-
-			// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
-			fmt = "\\link {1} &thinsp; \\image html {0} \"{1}\" width={2}px \\endlink";
-			FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
-			GalleryList.Add(galleryEntry);
-		}
-	}
 
 	// Gives the line places to break if needed.
 	// TODO: (actually turns out doxygen won't do it, so left this here with
@@ -1676,15 +1686,26 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	bool isDeprecated = false;
 	FString sDeprecated = "This material will be removed in future versions.";
 
-	//The (default) config file where public values can be saved/referenced.
+	// The (default) config file where public values can be saved/referenced.
 	FString config = GetTrimmedConfigFilePath(material->GetDefaultConfigFilename());
+
+	// material domain
+	FString domain;
+	UEnum::GetValueAsString(material->MaterialDomain,domain);
+	domain.RemoveFromStart("MD_");
 
 	FString description;
 	description += material->GetDesc() + "\n";
-	description += "	" + material->GetDetailedInfo();
+	//description += "	" + material->GetDetailedInfo();
+	description += "	" + material->MaterialGraph->RootNode->NodeComment;
 	description = description.TrimStartAndEnd();
 
-	//TODO: material domain
+	//wcout << "DESC: " << *material->MaterialGraph->RootNode->NodeComment << endl;		//TODO this doesn't work
+
+	// no information is really available as provided by the user/package.
+	// there isn't really even a place to put it in the interface,
+	// so we make it blank here and leave it out.
+	//description = "";	
 
 	*out << "/**" << endl;
 	//*out << "	\\class " << *className << endl;
@@ -1699,11 +1720,12 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	*out << "	\\brief A material with " << graphCount << " graphs." << endl;
 	*out << endl;
 
-	if (!imagetag.IsEmpty())
-		*out << "	" << *imagetag << endl;
+	if (!imageTag.IsEmpty())
+		*out << "	" << *imageTag << endl;
 
 	*out << "	UDF Path: <b>" << *packageNameBreaks << "</b>" << endl;
 	*out << "	<br/>Config: <b>" << *config << "</b>" << endl;
+	*out << "	<br/>Domain: <b>" << *domain << "</b>" << endl;
 
 	if (!description.IsEmpty())
 	{
@@ -1738,7 +1760,7 @@ FString UBlueprintDoxygenCommandlet::getCppType(FProperty *prop)
 	return type;
 }
 
-void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FString what)
+void UBlueprintDoxygenCommandlet::writeBlueprintMembers(UBlueprint* blueprint, FString what)
 {
 	//name				//name, fname, cppname
 	//type				//cpp type?
@@ -1833,7 +1855,15 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 			//TODO defaults!
 		}
 
-		FString description = fp->GetToolTipText().ToString();
+		// TODO: can't seem to find a description that doesn't include the "Varname: description" format.
+		// we want just description without the varname.
+		FString description = fp->GetToolTipText(true).ToString();
+		//FString description = fp->GetMetaData(TEXT("ShortToolTip"));
+
+		FString descriptionV, descriptionD;
+		description.Split(TEXT(":"), &descriptionV, &descriptionD);
+		if (!descriptionD.IsEmpty())
+			description = descriptionD.TrimStartAndEnd();
 		if (description.IsEmpty())
 			description = friendlyName;
 		description = description.Replace(TEXT("\r"), TEXT(""));
@@ -1853,9 +1883,10 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 		//TODO: get more data	UEdGraphNode::GetDeprecationResponse
 		bool isDeprecated = flags & EPropertyFlags::CPF_Deprecated;
 		FString sDeprecated = fp->GetMetaData("DeprecationMessage");
-		sDeprecated = sDeprecated.Replace(TEXT("\r"), TEXT(""));
-		sDeprecated = sDeprecated.Replace(TEXT("\n"), TEXT("<br/>"));
-		sDeprecated = sDeprecated.Replace(TEXT("\\"), TEXT("\\\\"));
+		sDeprecated = htmlentities(sDeprecated);
+		//sDeprecated = sDeprecated.Replace(TEXT("\r"), TEXT(""));
+		//sDeprecated = sDeprecated.Replace(TEXT("\n"), TEXT("<br/>"));
+		//sDeprecated = sDeprecated.Replace(TEXT("\\"), TEXT("\\\\"));
 		if (sDeprecated.IsEmpty()) sDeprecated = "This variable will be removed in future versions.";
 
 		uint32 rflags = v.ReplicationCondition;
@@ -1985,6 +2016,210 @@ void UBlueprintDoxygenCommandlet::writeAssetMembers(UBlueprint* blueprint, FStri
 //	*out << "	///@}" << endl;
 }
 
+void UBlueprintDoxygenCommandlet::writeMaterialMembers(UMaterial* material, FString what)
+{
+	//TODO: this needs a cleanup!
+
+	//need:
+	// private/public/protected			[X] Always public
+	// type								[x] Kinda, through the enum
+	// name								[X] 
+	// default value (if not empty)		[ ] Can't get the syntax
+	// detail/description				[X]
+	// category							[X] sort by this
+
+	TMap<FString, TMap<FString, TArray<FString> > > members;	//yeah man!
+
+	members.Add("public", TMap<FString, TArray<FString> >());
+	members.Add("protected", TMap<FString, TArray<FString> >());
+	members.Add("private", TMap<FString, TArray<FString> >());
+
+	material->BuildEditorParameterList();
+	TMap<FName, TArray<UMaterialExpression*> > params = material->EditorParameters;
+	for (TTuple<FName, TArray<UMaterialExpression*> > pn : params)
+	{
+		//wcout << "ASSET: " << *pn.Key.ToString() << endl;
+
+		FString friendlyName = pn.Key.ToString();
+		FString variableName = createVariableName(pn.Key.ToString(),false);
+		FString type;
+		FString category;
+		FString description;
+		FString initializer;
+
+		TArray<UMaterialExpression*> exps = pn.Value;
+		if (exps.Num())
+		{
+			UMaterialExpression* exp = exps[0];
+
+			EMaterialParameterType ptype = exp->GetParameterType();
+			//UEnum::GetValueAsString(ptype, type);
+
+			switch (ptype)
+			{
+			case EMaterialParameterType::Scalar:
+				type = "float";		break;
+
+			case EMaterialParameterType::Vector:
+				type = "Vector3d";	break;
+
+			case EMaterialParameterType::Texture:
+			case EMaterialParameterType::DoubleVector:
+			case EMaterialParameterType::StaticComponentMask:
+			case EMaterialParameterType::RuntimeVirtualTexture:
+				type = "Texture2d";	break;
+
+				//case EMaterialParameterType::StaticSwitch:
+			case EMaterialParameterType::NumRuntime:
+			case EMaterialParameterType::Num:
+				type = "int";		break;
+
+			case EMaterialParameterType::Font:
+				type = "Font";		break;
+
+			default:
+				type = "void";		break;
+			}
+
+			TArray<FText> categories = exp->MenuCategories;
+			category = categories.Num() ? categories[0].ToString() : "Default";
+
+			FGuid expid = exp->GetParameterExpressionId();
+
+			//TArray<FMaterialParameterInfo> info;
+			//TArray<FGuid> guids;
+			//material->Expressions
+			//material->GetAllParameterInfo(info, guids);
+
+			//FString initializer = "";
+			//material->GetScalarParameterSliderMinMax(;
+			//material->GetScalarParameterDefaultValue
+
+			description = exp->Desc;
+			FString descriptionV, descriptionD;
+			description.Split(TEXT(":"), &descriptionV, &descriptionD);
+			if (!descriptionD.IsEmpty())
+				description = descriptionD.TrimStartAndEnd();
+			//if (description.IsEmpty())
+			//	description = friendlyName;
+			description = description.Replace(TEXT("\r"), TEXT(""));
+			description = description.Replace(TEXT("\n"), TEXT(" "));
+			description = description.Replace(TEXT("\\"), TEXT("\\\\"));
+			//wcout << "DESCRIPTION: " << *description << endl;
+		}
+		else
+			wcout << "No UMaterialExpression!  Can't add parameter." << endl;
+
+		bool isPrivate = false;
+		bool isPublic = true;
+
+		//FString e = FString::Printf(TEXT("%s %s = \"%s\";\t//!< %s"),
+		//	*type,
+		//	*variableName,
+		//	*initializer,
+		//	*description
+		//);
+
+		FString e = FString::Printf(TEXT("%s %s;\t//!< %s"),
+			*type,
+			*variableName,
+			*description
+		);
+
+		if (isPrivate)
+			members["private"].FindOrAdd(category).Add(e);
+		else if (isPublic)
+			members["public"].FindOrAdd(category).Add(e);
+		else
+			members["protected"].FindOrAdd(category).Add(e);
+	}
+
+	if (members["public"].Num())
+	{
+		*out << "public:" << endl;
+//		*out << "	/**" << endl;
+//		*out << "		\\name Public " << *what << " Variables" << endl;
+//		*out << "		Members exposed outside the graph editor and in subclasses." << endl;
+//		*out << "	*/" << endl;
+//		*out << "	///@{" << endl;
+		//*out << "	//public members exposed to the editor." << endl;
+
+		members["public"].KeySort([](FString A, FString B) { return A < B; });
+		for (TPair<FString, TArray<FString> > k : members["public"])
+		{
+			if (k.Key != "Default")
+			{
+//				*out << "	/** \\name " << *k.Key << " (public) */" << endl;	//we have no description, just a category
+//				*out << "	///@{" << endl;
+			}
+
+			for (FString v : k.Value)
+				*out << "	" << *v << endl;
+
+//			if (k.Key != "Default")
+//				*out << "	///@}" << endl;
+		}
+
+//		*out << "	///@}" << endl;
+	}
+
+	if (members["protected"].Num())
+	{
+		*out << endl;
+		*out << "protected:" << endl;
+//		*out << "	/**" << endl;
+//		*out << "		\\name Protected " << *what << " Variables" << endl;
+//		*out << "		Members available inside the graph editor and in subclasses." << endl;
+//		*out << "	*/" << endl;
+//		*out << "	///@{" << endl;
+
+		members["protected"].KeySort([](FString A, FString B) { return A < B; });
+		for (TPair<FString, TArray<FString> > k : members["protected"])
+		{
+			if (k.Key != "Default")
+			{
+//				*out << "	/** \\name " << *k.Key << " (protected) */" << endl;	//we have no description, just a category
+//				*out << "	///@{" << endl;
+			}
+
+			for (FString v : k.Value)
+				*out << "	" << *v << endl;
+
+//			if (k.Key != "Default")
+//				*out << "	///@}" << endl;
+		}
+
+//		*out << "	///@}" << endl;
+	}
+
+	//always report private... that's where graphs go.
+	*out << endl;
+	*out << "private:" << endl;
+//	*out << "	/**" << endl;
+//	*out << "		\\name Private " << *what << " Variables" << endl;
+//	*out << "		Members available inside the graph editor only." << endl;
+//	*out << "	*/" << endl;
+//	*out << "	///@{" << endl;
+
+	members["private"].KeySort([](FString A, FString B) { return A < B; });
+	for (TPair<FString, TArray<FString> > k : members["private"])
+	{
+		if (k.Key != "Default")
+		{
+			//			*out << "	/** \\name " << *k.Key << " (private) */" << endl;	//we have no description, just a category
+			//			*out << "	///@{" << endl;
+		}
+
+		for (FString v : k.Value)
+			*out << "	" << *v << endl;
+
+		//		if (k.Key != "Default")
+		//			*out << "	///@}" << endl;
+	}
+
+	//	*out << "	///@}" << endl;
+}
+
 void UBlueprintDoxygenCommandlet::writeAssetFooter()
 {
 	*out << "};" << endl;
@@ -2045,7 +2280,9 @@ FString UBlueprintDoxygenCommandlet::prepTemplateString(FString prefix, vmap sty
 		h = h.Replace(*s, TEXT(""));
 
 	//clean up any empty <i> tags from replacement
-	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));				//for nodes missing a second line
+	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));	//for nodes missing a second line
+	h = h.Replace(TEXT("<br/>&nbsp;<i></i>"), TEXT(""));									//for nodes missing a second line
+	h = h.Replace(TEXT("<br/><i></i>"), TEXT(""));									//for nodes missing a second line
 
 	h = h.Replace(TEXT("\r"), *(TEXT("") + prefix));
 	h = h.Replace(TEXT("\n"), *(TEXT("\n") + prefix));
@@ -2123,19 +2360,20 @@ void UBlueprintDoxygenCommandlet::writeGraphFooter(FString prefix, UEdGraph *gra
 
 	//FString type = g->GetClass()->GetSuperClass()->GetFName().ToString();
 	//FString type = GetClassName(graph->GetOuter()->GetClass());
-	FString type = GetClassName(graph->GetClass());
+	//FString type = GetClassName(graph->GetClass());
 
 	*out << *prefix << *_tab << "}" << endl;
 	*out << *prefix << *_tab << "\\enddot" << endl;
 	*out << *prefix << "*/" << endl;
 
 	//bool isFunction = ??
-
 	//if (isFunction)
 	//	*out << *prefix << *type << " " << *functionName << "(" << *functionArguments << ");" << endl;
 	//else
 
-	FString cpp = GetGraphCPP(graph);
+	//FString _namespace = currentMaterialInterface ? currentMaterialInterface->GetName() : "";
+
+	FString cpp = GetGraphCPP(graph);// , _namespace);
 	*out << *prefix << *cpp << ";	//\"" << *graphNameHuman << "\"" << endl;
 }
 
@@ -2157,10 +2395,12 @@ TMap<FString, UBlueprintDoxygenCommandlet::NodeType> UBlueprintDoxygenCommandlet
 	{ "node",						NodeType::node			},
 	{ "comment",					NodeType::comment		},
 	{	"EdGraphNode_Comment",		NodeType::comment		},
+	{	"MaterialGraphNode_Comment",NodeType::comment		},
 	{ "bubble",						NodeType::bubble		},
 	{ "path",						NodeType::path			},	//TODO: no instances of this yet
 	{ "route",						NodeType::route			},
 	{	"K2Node_Knot",				NodeType::route			},
+	{	"MaterialGraphNode_Knot",	NodeType::route			},
 	{ "variable",					NodeType::variable		},
 	{	"K2Node_VariableGet",		NodeType::variable		},
 	{ "variableset",				NodeType::variableset	},
@@ -2186,6 +2426,13 @@ TMap<FString, UBlueprintDoxygenCommandlet::NodeType> UBlueprintDoxygenCommandlet
 	{	"K2Node_ConstructObjectFromClass",NodeType::spawn	},
 	{	"K2Node_DynamicCast",		NodeType::spawn			},
 	{	"K2Node_ClassDynamicCast",	NodeType::spawn			},
+	{ "materialnode",				NodeType::materialnode	},
+	{	"MaterialGraphNode_Root",	NodeType::materialnode	},
+	{	"MaterialGraphNode",		NodeType::materialnode	},
+	{ "materialcomposite",			NodeType::materialcomposite},
+	{	"MaterialGraphNode_Composite",NodeType::materialcomposite},
+	{ "materialtunnel",				NodeType::materialtunnel},
+	{	"MaterialGraphNode_PinBase",NodeType::materialtunnel},
 	{ "MAX",						NodeType::MAX			}
 };
 
@@ -2201,11 +2448,13 @@ FString UBlueprintDoxygenCommandlet::getNodeTemplate(NodeType type, bool hasDele
 //	K2Node_Composite		// subgraph, will have different urls
 //	[function]				// subgraph!
 //	[macro]					// subgraph, but probably not openable
+//	material node(s)		// no icon, collapsable?
 
 	FString t;
 	switch (type)
 	{
-	case NodeType::composite:	//composite	//no icon, no header color, may be multi-line title
+	case NodeType::materialcomposite:
+	case NodeType::composite:			//composite	//no icon, no header color, may be multi-line title
 		t = R"PixoVR(
 _NODENAME_ [
 	layer="nodes"
@@ -2243,6 +2492,31 @@ _NODENAME_ [
 				<tr>
 					<td align="center" balign="center" fixedsize="true" width="_COMPACTWIDTH_" height="1" colspan="4"><font color="_COMPACTCOLOR_" point-size="_COMPACTSIZE_"><b>_NODETITLE_</b></font></td>
 				</tr>
+_PORTROWS_
+			</table>
+		</td></tr></table>
+	>
+];)PixoVR";
+
+		break;
+
+	case NodeType::materialtunnel:
+	case NodeType::materialnode:
+		t = R"PixoVR(
+_NODENAME_ [
+	layer="nodes"
+	pos="_POS_"
+	tooltip="_TOOLTIP_"
+	class="_CLASS_"
+	URL="_URL_"
+
+	label=<
+		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
+			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
+				<tr>
+					<td colspan="4" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>&nbsp;_NODETITLE__HEIGHTSPACER_&nbsp;</b><br/>&nbsp;<i>_NODETITLE2_</i></td>
+				</tr>
+				<hr/>
 _PORTROWS_
 			</table>
 		</td></tr></table>
@@ -2444,7 +2718,7 @@ _NODENAME__comment [
 					<td align="left" balign="left" port="comment"><font point-size="_FONTSIZEBUBBLE_">_NODECOMMENT_</font></td>
 				</tr>
 				<tr>
-					<td align="left" cellpadding="0" cellspacing="0" fixedsize="true" width="50" height="2"><font color="_BORDERCOLOR_" point-size="12">&nbsp;&nbsp;&nbsp;&nbsp;&#9660;</font></td>
+					<td align="left" cellpadding="0" cellspacing="0" fixedsize="true" width="40" height="2"><font color="_BORDERCOLOR_" point-size="12">&nbsp;&nbsp;&nbsp;&nbsp;&#9660;</font></td>
 				</tr>
 			</table>
 		</td></tr></table>
@@ -2617,6 +2891,7 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 	//variables							X
 	//function nodes					X
 	//macro								X
+	//material nodes?
 
 	NodeType type = GetNodeType(node, NodeType::node);
 	FString url = "";
@@ -2631,23 +2906,70 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 
 	switch (type)
 	{
-		case NodeType::composite:		// subgraph
-		case NodeType::tunnel:			// subgraph
+		case NodeType::materialcomposite:	// subgraph
+		case NodeType::materialtunnel:		// subgraph
+		case NodeType::composite:			// subgraph
+		case NodeType::tunnel:				// subgraph
 		{
-			UK2Node_Tunnel* tunnel = dynamic_cast<UK2Node_Tunnel*>(node);
+			UEdGraph* graph = NULL;
+			UEdGraph* igraph = NULL;
+			UEdGraph* ograph = NULL;
 
-			if (!tunnel)
+			//UK2Node_Tunnel* tunnel = Cast<UK2Node_Tunnel*,
+
+			UK2Node_Tunnel* tunnel = dynamic_cast<UK2Node_Tunnel*>(node);
+			if (tunnel)
 			{
-				UE_LOG(LOG_DOT, Error, TEXT("Can't cast to tunnel."));
-				break;
+				UK2Node_Tunnel* inode = tunnel->GetInputSink();
+				UK2Node_Tunnel* onode = tunnel->GetOutputSource();
+
+				igraph = inode ? inode->GetGraph() : NULL;
+				ograph = onode ? onode->GetGraph() : NULL;
 			}
 
-			UK2Node_Tunnel* inode = tunnel->GetInputSink();
-			UK2Node_Tunnel* onode = tunnel->GetOutputSource();
+			UMaterialGraphNode_Composite* matcomp = dynamic_cast<UMaterialGraphNode_Composite*>(node);
+			if (matcomp)
+			{
+				TArray<UEdGraph*> graphs = matcomp->GetSubGraphs();
+				if (graphs.Num() > 1)
+					ograph = graphs[1];
+				if (graphs.Num() > 0)
+					igraph = graphs[0];
+				else
+					UE_LOG(LOG_DOT, Error, TEXT("Can't get a graph."));
+			}
 
-			UEdGraph* graph = NULL;
-			UEdGraph* igraph = inode ? inode->GetGraph() : NULL;
-			UEdGraph* ograph = onode ? onode->GetGraph() : NULL;
+			UMaterialGraphNode_PinBase* matpin = dynamic_cast<UMaterialGraphNode_PinBase*>(node);
+			if (matpin)
+			{
+				UMaterialGraph* mg = dynamic_cast<UMaterialGraph*>(originalGraph);
+				UMaterial* mat = NULL;
+
+				if (mg)	mat = mg->Material;
+
+				if (mat)
+				{
+					TArray<UEdGraph*> graphs;
+					UEdGraph* g = mat->MaterialGraph;
+					graphs.Add(g);
+					addAllGraphs(graphs, g->SubGraphs);
+					for (UEdGraph* gg : graphs)
+					{
+						if (gg->SubGraphs.Contains(originalGraph))
+						{	ograph = igraph = gg;
+							break;
+						}
+					}
+				}
+				else
+					UE_LOG(LOG_DOT, Error, TEXT("Pin can't get a graph or material."));
+			}
+
+			if (!tunnel && !matcomp && !matpin)
+			{
+				UE_LOG(LOG_DOT, Error, TEXT("Can't cast to tunnel/composite/materialcomposite."));
+				break;
+			}
 
 			switch (direction)
 			{
@@ -2670,15 +2992,35 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 
 			if (graph)
 			{
-				blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(graph);
-
 				//if not on the no-fly list...
-				if (ShouldReportObject(blueprint))
+				bool report = ShouldReportObject(graph);
+
+				blueprint = FBlueprintEditorUtils::FindBlueprintForGraph(graph);
+				//if (ShouldReportObject(blueprint))
+
+				if (report)
 				{
-					blueprintClassName = GetClassName(blueprint->GeneratedClass);
-					variableName = createVariableName(graph->GetName(), false);
+					if (blueprint)
+					{
+						blueprintClassName = GetClassName(blueprint->GeneratedClass);
+						variableName = createVariableName(graph->GetName(), false);
+					}
+					else if (matcomp || matpin)
+					{
+						blueprintClassName = currentMaterialInterface->GetName();
+
+						//special faux constructor case
+						if (currentMaterialInterface->GetMaterial()->MaterialGraph == graph)
+							variableName = blueprintClassName;
+						else
+							variableName = createVariableName(graph->GetName(), false);
+					}
+					// else
+					//	no url!
 				}
 			}
+			//else
+			//	UE_LOG(LOG_DOT, Error, TEXT("Composite can't get a graph."));
 		}
 		break;
 
@@ -2817,6 +3159,7 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 		break;
 
 	default:
+		//wcout << "unknown url type: " << *node->GetName() << endl;
 		break;
 	}
 
@@ -2834,7 +3177,7 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 
 	//FString nn = node->GetNodeTitle(ENodeTitleType::MenuTitle).ToString();
 	//wcout << *originalBlueprintClassName << " || " << *blueprintClassName << " || " << *originalGraphName << " || " << *variableName << " >> ";
-	//wcout << *nn << " :: " << *node->GetName() << " :: URL: " << *url << endl;
+	//wcout << *node->GetName() << " :: URL: " << *url << endl;
 
 	FString cpp = GetGraphCPP(originalGraph, originalBlueprintClassName);
 	if (!url.IsEmpty())
@@ -2858,6 +3201,22 @@ FString UBlueprintDoxygenCommandlet::GetGraphCPP(UEdGraph* graph, FString _names
 	//FString type = GetClassName(graph->GetOuter()->GetClass());
 	FString type = GetClassName(graph->GetClass());
 	type = "void";
+
+	if (currentMaterialInterface)
+	{
+		UMaterialGraph* mg = dynamic_cast<UMaterialGraph*>(graph);
+		UMaterial* mat = mg ? mg->Material : NULL;
+
+		if (mat->MaterialGraph == graph)
+		{
+			//UMaterialInstance* mi = mat ? dynamic_cast<UMaterialInstance*>(mat) : NULL;
+			//if (mi && currentMaterialInterface)
+			//{
+				graphName = currentMaterialInterface->GetName();
+				graphNameVariable = createVariableName(graphName, false);
+			//}
+		}
+	}
 
 	//TODO ... function signatures?
 	//bool isFunction = ??
@@ -2891,6 +3250,7 @@ FString UBlueprintDoxygenCommandlet::GetNodeIcon(UEdGraphNode* node)
 		case NodeType::event:
 			return NodeIcons["event"];		//event
 
+		case NodeType::materialcomposite:
 		case NodeType::composite:
 		case NodeType::function:
 			return NodeIcons["container"];	//container
@@ -2957,7 +3317,7 @@ bool UBlueprintDoxygenCommandlet::isDelegatePin(UEdGraphPin* pin)
 	return false;
 }
 
-FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNode* node)
+FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FString, FString> visiblePins)
 {
 	//both
 	FString nodeTemplate_11 = R"PixoVR(<tr>
@@ -2976,11 +3336,6 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 	<td colspan="2" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
 </tr>)PixoVR";
 
-/*
-	FString routeTemplate2 = R"PixoVR(<tr>
-	<td port="port" href="_PINURL_" title="_NODECOMMENT_">&#11044;</td>
-</tr>)PixoVR";
-*/
 	//&reg;
 	//&#10122;
 	FString routeTemplate = R"PixoVR(<tr>
@@ -3045,7 +3400,7 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 	for (UEdGraphPin* p : pins)
 	{
 		//don't show hidden pins
-		if (!PinShouldBeVisible(p))
+		if (!PinShouldBeVisible(p,visiblePins))
 			continue;
 
 		if (p->Direction == EEdGraphPinDirection::EGPD_Input)
@@ -3055,6 +3410,7 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 				outs.Add(p);
 	}
 
+	TMap<FString, FString> vp;
 	FString sname, sport, sside, dname, dport, dside, color, connection;
 	FString rowTemplate;
 	UEdGraphPin *i=NULL, *o=NULL;
@@ -3102,12 +3458,16 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 			pindata["_INLABEL_"] = isCompact ? "" : GetPinLabel(i);
 			pindata["_INCOLOR_"] = color;
 			pindata["_INVALUE_"] = isConnected ? "" : GetPinDefaultValue(i);
-			pindata["_INTOOLTIP_"] = GetPinTooltip(i);
+			pindata["_INTOOLTIP_"] = GetPinTooltip(i,visiblePins);
 
 			//create connection(s)
 			dname = i->GetOwningNode()->GetName();		//the source name, from this output
 			for (UEdGraphPin* s : i->LinkedTo)
 			{
+				vp = GetVisiblePins(s->GetOwningNode());
+				if (!PinShouldBeVisible(s, vp))
+					continue;
+
 				otherIsRoute = GetNodeType(s->GetOwningNode(), NodeType::node) == NodeType::route;
 				sname = s->GetOwningNode()->GetName();	//the destination node, from this output
 				sport = GetPinPort(s);
@@ -3146,6 +3506,10 @@ FString UBlueprintDoxygenCommandlet::prepNodePortRows(FString prefix, UEdGraphNo
 			sname = o->GetOwningNode()->GetName();		//the source name, from this output
 			for (UEdGraphPin* d : o->LinkedTo)
 			{
+				vp = GetVisiblePins(d->GetOwningNode());
+				if (!PinShouldBeVisible(d, vp))
+					continue;
+
 				otherIsRoute = GetNodeType(d->GetOwningNode(), NodeType::node) == NodeType::route;
 				dname = d->GetOwningNode()->GetName();	//the destination node, from this output
 				dport = GetPinPort(d);
@@ -3198,8 +3562,14 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 	FString typeGroup = GetNodeTypeGroup(type);
 	FString url = GetNodeURL(n);
 	FString tooltip = GetNodeTooltip(n);
-	FString title = n->GetNodeTitle(ENodeTitleType::ListView).ToString();
+	FString title = n->GetNodeTitle(ENodeTitleType::ListView).ToString();	//kinda useless
 	FString title2 = "";
+
+	UMaterialGraphNode* mn = dynamic_cast<UMaterialGraphNode*>(n);
+	bool hasBubble = n->bCommentBubbleVisible ||
+		n->bCommentBubblePinned ||
+		n->ShouldMakeCommentBubbleVisible() ||
+		(mn && mn->MaterialExpression->bCommentBubbleVisible);// || n->NodeComment.IsEmpty() );
 
 	UEdGraphNode_Comment* comment = dynamic_cast<UEdGraphNode_Comment*>(n);
 	FLinearColor titleColor = (comment) ? comment->CommentColor : n->GetNodeTitleColor();
@@ -3212,6 +3582,24 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 		ftitle.Split(TEXT("\n"), &title, &title2);
 		if (!title2.IsEmpty())
 			title2 = "<font point-size=\"_FONTSIZE2_\">" + title2 + "</font>";
+		else
+			title = ftitle.TrimStartAndEnd();
+
+		//wcout << "FTITLE: " << *ftitle << endl;
+		//wcout << "FTITLE: " << *title << " || " << *title2 << endl;
+	}
+
+	TMap<FString, FString> visiblePins;								// if empty, all pins are allowed.  Otherwise only these pins are allowed.  This is set during node reporting.
+	UMaterialGraphNode_Root* materialRoot = dynamic_cast<UMaterialGraphNode_Root*>(n);
+	if (materialRoot)
+	{
+		title = mn ? mn->MaterialExpression->GetName() : currentMaterialInterface->GetName();
+		//hasBubble |= mn ? mn->MaterialExpression->bCommentBubbleVisible : hasBubble;
+		//title = materialRoot->GetGraph()->GetName();
+		//title = materialRoot->GetNodeTitle(ENodeTitleType::ListView).ToString();
+
+		//we only populate visiblePins here because we know it's the root node.
+		visiblePins = GetVisiblePins(n);
 	}
 
 	if (type == NodeType::compact)
@@ -3265,9 +3653,13 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 
 	TArray<FString> lines;											// we throw this away
 	FString comment_ = n->NodeComment.TrimStartAndEnd();
+	//if (mn)	comment_ = mn->MaterialExpression->Desc;
+
 	float numLines = comment_.ParseIntoArrayLines(lines, false);	// for bubble
 	comment_ = comment_.Replace(TEXT("\r"), TEXT(""));
 	comment_ = comment_.Replace(TEXT("\n"), TEXT(" <br/>"));		// after counting lines
+
+	//wcout << "FTITLE: " << *title << " ## " << hasBubble << " * " << (mn?1:0) << " ## " << *comment_ << endl;
 
 	bool hasDelegate = false;
 
@@ -3289,7 +3681,7 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 	BlueprintStyle.Add("_HEADERCOLORTRANS_", createColorString(titleColor, 0.5f));
 	BlueprintStyle.Add("_CLASS_", typeGroup);
 	BlueprintStyle.Add("_URL_", url);				//URL = "\ref SomeSubgraph"
-	BlueprintStyle.Add("_PORTROWS_", prepNodePortRows(prefix+_tab+_tab,n));
+	BlueprintStyle.Add("_PORTROWS_", prepNodePortRows(prefix+_tab+_tab,n,visiblePins));
 	BlueprintStyle.Add("_FONTSIZECOMMENT_", FString::FromInt(commentSize));
 
 	FString nodeTemplate = getNodeTemplate(type, hasDelegate);
@@ -3297,7 +3689,8 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 	*out << *prepTemplateString(prefix + _tab, BlueprintStyle, nodeTemplate) << endl;
 
 	//if a comment is visible, add it as a node and connect the arrow
-	if (n->bCommentBubbleVisible)
+	if (hasBubble)
+	if (n->GetClass()->GetFName() != "MaterialGraphNode_Comment")
 	{
 		float lineHeight = 22.0f;
 		float margin = 29.0f;

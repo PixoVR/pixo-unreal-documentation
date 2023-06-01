@@ -88,6 +88,9 @@ protected:
 		event,
 		path,
 		spawn,
+		materialnode,
+		materialcomposite,
+		materialtunnel,
 		MAX
 	};
 
@@ -131,13 +134,14 @@ protected:
 	FString GetNodeURL(UEdGraphNode* node, EEdGraphPinDirection direction = EEdGraphPinDirection::EGPD_MAX);
 	FString GetNodeTooltip(UEdGraphNode* node);
 	FString GetDelegateIcon(UEdGraphNode* node, bool *hasDelegate=NULL);
+	TMap<FString, FString> GetVisiblePins(UEdGraphNode* node);
 
 	//pin stuff
-	bool PinShouldBeVisible(UEdGraphPin* pin);
+	bool PinShouldBeVisible(UEdGraphPin* pin, TMap<FString, FString> visiblePins = TMap<FString, FString>());
 	bool isDelegatePin(UEdGraphPin* pin);
 	FString GetPinLabel(UEdGraphPin* pin);
 	FString GetPinType(UEdGraphPin* pin, bool useSchema=false);
-	FString GetPinTooltip(UEdGraphPin* pin);
+	FString GetPinTooltip(UEdGraphPin* pin, TMap<FString, FString> visiblePins = TMap<FString, FString>());
 	FString GetPinIcon(UEdGraphPin* pin);
 	FString GetPinColor(UEdGraphPin* pin);
 	FString GetPinPort(UEdGraphPin* pin);
@@ -190,19 +194,21 @@ protected:
 	FString prepTemplateString(FString prefix, vmap vars, FString string);
 	FString getCppType(FProperty *prop);
 
-	void writeAssetMembers(UBlueprint* object, FString which);
 	void writeAssetFooter();
 	void writeAssetCalls();
 
 	void writeBlueprintHeader(UBlueprint *blueprint, FString group, FString qualifier, FString packageName, int graphCount);
-	void writeMaterialHeader(UMaterialInterface* material, FString group, FString qualifier, FString packageName, int graphCount);
+	void writeBlueprintMembers(UBlueprint* blueprint, FString which);
+
+	void writeMaterialHeader(UMaterialInterface* material, FString group, FString qualifier, FString packageName, FString imageTag, int graphCount);
+	void writeMaterialMembers(UMaterial* material, FString which);
 
 	void writeGraphHeader(FString prefix, UEdGraph *graph, FString qualifier);
 	void writeGraphFooter(FString prefix, UEdGraph *graph);
 	void writeGraphConnections(FString prefix);
 
 	FString getNodeTemplate(NodeType type, bool hasDelegate=false);
-	FString prepNodePortRows(FString prefix, UEdGraphNode *node);
+	FString prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FString, FString> visiblePins = TMap<FString, FString>());
 	void writeNodeBody(FString prefix, UEdGraphNode *node);
 
 private:
@@ -213,4 +219,6 @@ private:
 
 	std::wostream *out = NULL;		// our output stream, which will default to std::wcout
 	std::wofstream *outfile = NULL;	// our output file, which will default to NULL unless opened
+
+	UMaterialInterface* currentMaterialInterface = NULL;	//yeah ok, it's kind of global.
 };
