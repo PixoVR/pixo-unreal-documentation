@@ -24,6 +24,7 @@
 //#include "K2Node_ConstructObjectFromClass.h"
 
 #include "Kismet2/BlueprintEditorUtils.h"
+#include "Engine/SimpleConstructionScript.h"
 
 #include "EdGraphNode_Comment.h"
 #include "EdGraphSchema_K2.h"
@@ -327,8 +328,12 @@ bool UBlueprintDoxygenCommandlet::ClearGroups()
 
 	if (stream.is_open())
 	{
+		FString tpath = fpath;
+		tpath.RemoveFromStart(outputDir);
+		tpath = "[OutputDir]" + tpath;
+
 		//UE_LOG(LOG_DOT, Warning, TEXT("Clearing '%s'..."), *fpath);
-		//wcout << "Clearing " << *fpath << endl;
+		wcout << "Clearing  " << *tpath << endl;
 		stream.close();
 	}
 	else
@@ -396,6 +401,9 @@ void UBlueprintDoxygenCommandlet::ReportGroup(FString groupName, FString groupNa
 
 void UBlueprintDoxygenCommandlet::ReportBlueprints()
 {
+	if (outputMode & doxygen)
+		wcout << "Parsing  Blueprints..." << endl;
+
 	for (FAssetData const& Asset : BlueprintAssetList)
 	{
 		if (ShouldReportAsset(Asset))
@@ -444,6 +452,9 @@ void UBlueprintDoxygenCommandlet::ReportBlueprints()
 
 void UBlueprintDoxygenCommandlet::ReportMaterials()
 {
+	if (outputMode & doxygen)
+		wcout << "Parsing  Materials..." << endl;
+
 	for (FAssetData const& Asset : MaterialAssetList)
 	{
 		if (ShouldReportAsset(Asset))
@@ -672,7 +683,7 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 			tpngPath = "[OutputDir]" + tpngPath;
 
 			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			wcout << "No image:  " << *tpngPath << endl;
+			wcout << "No Image  " << *tpngPath << endl;
 		}
 		else
 		{
@@ -755,7 +766,6 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 	currentMaterialInterface = NULL;
 }
 
-//TODO: cleanup
 void UBlueprintDoxygenCommandlet::addAllGraphs(TArray<UEdGraph*>& container, TArray<UEdGraph*>& graphs)
 {
 	for (UEdGraph* g : graphs)
@@ -997,7 +1007,10 @@ bool UBlueprintDoxygenCommandlet::OpenFile(FString fpath, bool append)
 		tpath = "[OutputDir]" + tpath;
 
 		//wcout << "Writing to " << *fpath << endl;
-		wcout << "Writing to " << *tpath << endl;
+		if (append)
+			wcout << "Appending " << *tpath << endl;
+		else
+			wcout << "Writing   " << *tpath << endl;
 	}
 	else
 	{
@@ -1142,8 +1155,8 @@ FString UBlueprintDoxygenCommandlet::GetPinTooltip(UEdGraphPin* p, TMap<FString,
 
 	hover = hover.TrimStartAndEnd();
 	hover = hover.Replace(TEXT("\r"), TEXT(""));
+	hover = hover.Replace(TEXT("\n"), TEXT("&#013;"));
 	hover = htmlentities(hover);
-	//hover = hover.Replace(TEXT("\n"), TEXT("&#013;"));
 	//hover = hover.Replace(TEXT("\\"), TEXT("\\\\"));
 	//hover = hover.Replace(TEXT("\""), TEXT("\\\""));
 	return hover;
@@ -1309,24 +1322,33 @@ FString UBlueprintDoxygenCommandlet::GetPinDefaultValue(UEdGraphPin* pin)
 
 void UBlueprintDoxygenCommandlet::LogResults()
 {
-	//if (outputMode & verbose)
+	FString results = FString::Printf(
+	TEXT(
+		"======================================================================================\n"
+		"Examined %d graphs(s).\n"
+		"Ignored %d blueprints(s).\n"
+		"Ignored %d materials(s).\n"
+		"Report Completed with %d errors and %d warnings and %d assets that failed to load.\n"
+		"======================================================================================\n"),
+		TotalGraphsProcessed,
+		TotalBlueprintsIgnored,
+		TotalMaterialsIgnored,
+		TotalNumFatalIssues,
+		TotalNumWarnings,
+		TotalNumFailedLoads
+	);
+
+	if (outputMode & doxygen)
+		wcout << *results;
+
+	if (outputMode & verbose)
 	{
 		//results output
 		UE_LOG(LOG_DOT,
 			Display,
-			TEXT("\n\n"
-				"======================================================================================\n"
-				"Examined %d graphs(s).\n"
-				"Ignored %d blueprints(s).\n"
-				"Ignored %d materials(s).\n"
-				"Report Completed with %d errors and %d warnings and %d assets that failed to load.\n"
-				"======================================================================================\n"),
-			TotalGraphsProcessed,
-			TotalBlueprintsIgnored,
-			TotalMaterialsIgnored,
-			TotalNumFatalIssues,
-			TotalNumWarnings,
-			TotalNumFailedLoads);
+			TEXT("%s"),
+			*results
+		);
 	}
 
 	//Assets with problems listing
@@ -1516,7 +1538,7 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString p
 						tpngPath.RemoveFromStart(outputDir);
 						tpngPath = "[OutputDir]" + tpngPath;
 
-						wcout << "Writing to " << *tpngPath << endl;
+						wcout << "Writing   " << *tpngPath << endl;
 
 						const TArray64<uint8>& CompressedByteArray = ImageWrapper->GetCompressed();
 						if (!FFileHelper::SaveArrayToFile(CompressedByteArray, *pngPath))
@@ -1570,7 +1592,7 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 			tpngPath = "[OutputDir]" + tpngPath;
 
 			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			wcout << "No image:  " << *tpngPath << endl;
+			wcout << "No Image  " << *tpngPath << endl;
 		}
 		else
 		{
@@ -1694,18 +1716,13 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	UEnum::GetValueAsString(material->MaterialDomain,domain);
 	domain.RemoveFromStart("MD_");
 
+	// TODO: no information is available as provided by the user/package.
+	// the only place I found is as a rootNode comment bubble, but it always seems empty.
 	FString description;
 	description += material->GetDesc() + "\n";
 	//description += "	" + material->GetDetailedInfo();
 	description += "	" + material->MaterialGraph->RootNode->NodeComment;
 	description = description.TrimStartAndEnd();
-
-	//wcout << "DESC: " << *material->MaterialGraph->RootNode->NodeComment << endl;		//TODO this doesn't work
-
-	// no information is really available as provided by the user/package.
-	// there isn't really even a place to put it in the interface,
-	// so we make it blank here and leave it out.
-	//description = "";	
 
 	*out << "/**" << endl;
 	//*out << "	\\class " << *className << endl;
@@ -1716,7 +1733,6 @@ void UBlueprintDoxygenCommandlet::writeMaterialHeader(
 	//if (isDeprecated)
 	//	*out << "	\\deprecated " << *sDeprecated << endl;
 
-	//*out << "	\\brief UDF Path: <b>" << *packageName << "</b> "<< endl;
 	*out << "	\\brief A material with " << graphCount << " graphs." << endl;
 	*out << endl;
 
@@ -1794,20 +1810,32 @@ void UBlueprintDoxygenCommandlet::writeBlueprintMembers(UBlueprint* blueprint, F
 	}
 	*/
 
-	wcout << "TODO: add other vars.  They're not as important and make the documentation messy." << endl;
+	TArray<FProperty*> variables;
 
-	/*
-	TSet<FName> variables;
-	FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, false);
-	//FBlueprintEditorUtils::GetClassVariableList(blueprint, variables, true);
-	TArray<FName> nonPrivateVars;
+	TSet<FName> varnames;
+	FBlueprintEditorUtils::GetClassVariableList(blueprint, varnames, false);
+	//FBlueprintEditorUtils::GetClassVariableList(blueprint, varnames, true);
 	FBPVariableDescription *vd = NULL;
-	for (FName n : variables)
+	for (FName n : varnames)
 	{
-		nonPrivateVars.Add(n);
-		wcout << *n.ToString() << endl;
+		//wcout << "MM " << *n.ToString() << endl;
+
+		FProperty* fp = blueprint->GeneratedClass->FindPropertyByName(n);
+		if (fp)
+		{
+		//	//const FBlueprintNodeSignature::FSignatureSet *meta = fp->GetMetaDataMap();
+		//	const TMap<FName, FString>* meta = fp->GetMetaDataMap();
+		//	for (TTuple<FName, FString> m : *meta)
+		//	{	wcout << "meta: " << *m.Key.ToString() << " => " << *m.Value << endl;	}
+
+			FString category = fp->GetMetaData("Category");
+			//wcout << " :: " << *category << endl;
+			if (category == "Default")
+				variables.AddUnique(fp);
+		}
+		//else
+		//	wcout << " :: [NO FP!]" << endl;
 	}
-	*/
 
 	//need:
 	// private/public/protected			[x] not sure it's correct
@@ -1825,11 +1853,23 @@ void UBlueprintDoxygenCommandlet::writeBlueprintMembers(UBlueprint* blueprint, F
 	members.Add("protected", TMap<FString, TArray<FString> >());
 	members.Add("private", TMap<FString, TArray<FString> >());
 
-	//variables new to this class (added to it's parent class)
+	// this may no longer be needed...
+	// variables new to this class (added to its parent class)
 	TArray<FBPVariableDescription> vars = blueprint->NewVariables;
 	for (FBPVariableDescription v : vars)
 	{
 		FProperty* fp = blueprint->GeneratedClass->FindPropertyByName(v.VarName);
+		variables.AddUnique(fp);
+	}
+
+	for (FProperty *fp : variables)
+	{
+		/*
+		//const FBlueprintNodeSignature::FSignatureSet *meta = fp->GetMetaDataMap();
+		const TMap<FName, FString>* meta = fp->GetMetaDataMap();
+		for (TTuple<FName, FString> m : *meta)
+		{	wcout << "meta: " << *m.Key.ToString() << " => " << *m.Value << endl;	}
+		*/
 
 		//FString extype;
 		//wcout << "CPP: " << *v.VarName.ToString() << endl;
@@ -1845,17 +1885,27 @@ void UBlueprintDoxygenCommandlet::writeBlueprintMembers(UBlueprint* blueprint, F
 
 		//FString varName = createVariableName(v.VarName.ToString(),false);
 		FString variableName = createVariableName(fp->GetNameCPP(), false);
-		FString friendlyName = v.FriendlyName;
-		FString category = v.Category.ToString();
+		//FString friendlyName = v.FriendlyName;
+		FString friendlyName = fp->GetMetaData("DisplayName");
+
+		//FString category = v.Category.ToString();
+		FString category = fp->GetMetaData("Category");
+
 		FString type = getCppType(fp);
 
-		FString initializer = v.DefaultValue;
+		//FString initializer = v.DefaultValue;
+		FString initializer = "";
 		//if (isObject)
 		{
 			//TODO defaults!
+			//fp->GetCPPType();
+			//fp->GetCPPMacroType();
+			//fp->GetCPPTypeForwardDeclaration();
+			//fp->ContainerPtrToValuePtrForDefaults(
+			//fp->ContainerPtrToValuePtr(
 		}
 
-		// TODO: can't seem to find a description that doesn't include the "Varname: description" format.
+		// Can't seem to find a description that doesn't include the "Varname: description" format.
 		// we want just description without the varname.
 		FString description = fp->GetToolTipText(true).ToString();
 		//FString description = fp->GetMetaData(TEXT("ShortToolTip"));
@@ -1874,22 +1924,22 @@ void UBlueprintDoxygenCommandlet::writeBlueprintMembers(UBlueprint* blueprint, F
 		bool isPrivate = true;
 		bool isPublic = false;
 
-		uint64 flags = v.PropertyFlags;
-		bool isReadonly = flags & EPropertyFlags::CPF_BlueprintReadOnly;
-		bool isConst = flags & EPropertyFlags::CPF_ConstParm;
-		bool isInstanceEditable = !(flags & EPropertyFlags::CPF_DisableEditOnInstance);
-		bool isConfigSaved = flags & EPropertyFlags::CPF_Config;
+		//uint64 flags = v.PropertyFlags;
+		EPropertyFlags flags = fp->PropertyFlags;
+		bool isReadonly = bool(flags & EPropertyFlags::CPF_BlueprintReadOnly);
+		bool isConst = bool (flags & EPropertyFlags::CPF_ConstParm);
+		bool isInstanceEditable = bool(!(flags & EPropertyFlags::CPF_DisableEditOnInstance));
+		bool isConfigSaved = bool (flags & EPropertyFlags::CPF_Config);
 
 		//TODO: get more data	UEdGraphNode::GetDeprecationResponse
-		bool isDeprecated = flags & EPropertyFlags::CPF_Deprecated;
+		bool isDeprecated = bool(flags & EPropertyFlags::CPF_Deprecated);
 		FString sDeprecated = fp->GetMetaData("DeprecationMessage");
+		sDeprecated = sDeprecated.Replace(TEXT("\r"), TEXT(""));
 		sDeprecated = htmlentities(sDeprecated);
-		//sDeprecated = sDeprecated.Replace(TEXT("\r"), TEXT(""));
-		//sDeprecated = sDeprecated.Replace(TEXT("\n"), TEXT("<br/>"));
-		//sDeprecated = sDeprecated.Replace(TEXT("\\"), TEXT("\\\\"));
 		if (sDeprecated.IsEmpty()) sDeprecated = "This variable will be removed in future versions.";
 
-		uint32 rflags = v.ReplicationCondition;
+		//uint32 rflags = v.ReplicationCondition;
+		ELifetimeCondition rflags = fp->GetBlueprintReplicationCondition();
 		bool isReplicated = rflags > 0;				//TODO: there's much more with ELifetimeCondition::*
 
 		//wcout << std::bitset<64>(flags) << endl;
@@ -2715,7 +2765,7 @@ _NODENAME__comment [
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table style="rounded" bgcolor="_NODECOLORTRANS_" border="1" cellborder="0" cellspacing="0" cellpadding="_COMMENTPADDING_">
 				<tr>
-					<td align="left" balign="left" port="comment"><font point-size="_FONTSIZEBUBBLE_">_NODECOMMENT_</font></td>
+					<td align="left" balign="left" port="comment"><font point-size="_FONTSIZEBUBBLE_">_NODECOMMENT_</font>&nbsp;</td>
 				</tr>
 				<tr>
 					<td align="left" cellpadding="0" cellspacing="0" fixedsize="true" width="40" height="2"><font color="_BORDERCOLOR_" point-size="12">&nbsp;&nbsp;&nbsp;&nbsp;&#9660;</font></td>
@@ -3566,10 +3616,11 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 	FString title2 = "";
 
 	UMaterialGraphNode* mn = dynamic_cast<UMaterialGraphNode*>(n);
-	bool hasBubble = n->bCommentBubbleVisible ||
-		n->bCommentBubblePinned ||
-		n->ShouldMakeCommentBubbleVisible() ||
-		(mn && mn->MaterialExpression->bCommentBubbleVisible);// || n->NodeComment.IsEmpty() );
+	bool hasBubble = n->bCommentBubbleVisible;
+	hasBubble |= n->bCommentBubblePinned;
+	hasBubble |= n->ShouldMakeCommentBubbleVisible();
+	hasBubble |= mn && mn->MaterialExpression->bCommentBubbleVisible;
+	hasBubble &= (n->GetClass()->GetFName() != "MaterialGraphNode_Comment");	// a comment can't show a comment
 
 	UEdGraphNode_Comment* comment = dynamic_cast<UEdGraphNode_Comment*>(n);
 	FLinearColor titleColor = (comment) ? comment->CommentColor : n->GetNodeTitleColor();
@@ -3594,7 +3645,6 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 	if (materialRoot)
 	{
 		title = mn ? mn->MaterialExpression->GetName() : currentMaterialInterface->GetName();
-		//hasBubble |= mn ? mn->MaterialExpression->bCommentBubbleVisible : hasBubble;
 		//title = materialRoot->GetGraph()->GetName();
 		//title = materialRoot->GetNodeTitle(ENodeTitleType::ListView).ToString();
 
@@ -3651,13 +3701,14 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 		posy += 2.0f / _dpi;
 	}
 
-	TArray<FString> lines;											// we throw this away
-	FString comment_ = n->NodeComment.TrimStartAndEnd();
-	//if (mn)	comment_ = mn->MaterialExpression->Desc;
-
-	float numLines = comment_.ParseIntoArrayLines(lines, false);	// for bubble
+	TArray<FString> lines;													// we throw this away
+	FString comment_ = n->NodeComment.TrimStartAndEnd();					// if (mn)	comment_ = mn->MaterialExpression->Desc;
+	float numLines = comment_.ParseIntoArrayLines(lines, false);			// for bubble
+	//if (numLines == 1)
+	//	comment_ = comment_ + "&nbsp;";										//spaces out the bubble
 	comment_ = comment_.Replace(TEXT("\r"), TEXT(""));
-	comment_ = comment_.Replace(TEXT("\n"), TEXT(" <br/>"));		// after counting lines
+	comment_ = comment_.Replace(TEXT("\n"), TEXT("&nbsp;<br/>"));			// after counting lines
+	hasBubble &= !comment_.IsEmpty();										// if the comment is empty, it won't show.
 
 	//wcout << "FTITLE: " << *title << " ## " << hasBubble << " * " << (mn?1:0) << " ## " << *comment_ << endl;
 
@@ -3690,7 +3741,6 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 
 	//if a comment is visible, add it as a node and connect the arrow
 	if (hasBubble)
-	if (n->GetClass()->GetFName() != "MaterialGraphNode_Comment")
 	{
 		float lineHeight = 22.0f;
 		float margin = 29.0f;
