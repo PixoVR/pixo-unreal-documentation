@@ -2,6 +2,8 @@
 
 #include "BlueprintDoxygenCommandlet.h"
 
+#include "Runtime/Launch/Resources/Version.h"
+
 #include "AssetRegistryModule.h"
 #include "GenericPlatform/GenericPlatformFile.h"
 //#include "GenericPlatform/GenericPlatformMisc.h"
@@ -29,10 +31,14 @@
 #include "EdGraphNode_Comment.h"
 #include "EdGraphSchema_K2.h"
 
-#include "MaterialGraph/MaterialGraph.h"
-#include "MaterialGraph/MaterialGraphSchema.h"
+#if ENGINE_MAJOR_VERSION >= 5
 #include "MaterialGraph/MaterialGraphNode_Composite.h"
 #include "MaterialGraph/MaterialGraphNode_PinBase.h"
+#endif
+
+#include "MaterialGraph/MaterialGraph.h"
+#include "MaterialGraph/MaterialGraphSchema.h"
+#include "MaterialGraph/MaterialGraphNode.h"
 #include "MaterialGraph/MaterialGraphNode_Root.h"
 #include "Materials/MaterialInstance.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -118,10 +124,11 @@ int32 UBlueprintDoxygenCommandlet::Main(const FString& Params)
 		return 1;
 	}
 
+	BuildAssetLists();
+
 	if (!ClearGroups())
 		return 1;
 
-	BuildAssetLists();
 	ReportBlueprints();
 	ReportMaterials();
 
@@ -238,6 +245,9 @@ void UBlueprintDoxygenCommandlet::BuildAssetLists()
 	if (outputMode & OutputMode::verbose)
 		UE_LOG(LOG_DOT, Warning, TEXT("Loading Asset Registry..."));
 
+	if (outputMode & doxygen)
+		wcout << "Loading Asset Registry..." << endl;
+
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 	AssetRegistryModule.Get().SearchAllAssets(/*bSynchronousSearch =*/true);
 	//UE_LOG(LOG_DOT, Display, TEXT("Finished Loading Asset Registry."));
@@ -333,7 +343,7 @@ bool UBlueprintDoxygenCommandlet::ClearGroups()
 		tpath = "[OutputDir]" + tpath;
 
 		//UE_LOG(LOG_DOT, Warning, TEXT("Clearing '%s'..."), *fpath);
-		wcout << "Clearing  " << *tpath << endl;
+		wcout << " Clearing  " << *tpath << endl;
 		stream.close();
 	}
 	else
@@ -402,7 +412,7 @@ void UBlueprintDoxygenCommandlet::ReportGroup(FString groupName, FString groupNa
 void UBlueprintDoxygenCommandlet::ReportBlueprints()
 {
 	if (outputMode & doxygen)
-		wcout << "Parsing  Blueprints..." << endl;
+		wcout << "Parsing Blueprints..." << endl;
 
 	for (FAssetData const& Asset : BlueprintAssetList)
 	{
@@ -453,7 +463,7 @@ void UBlueprintDoxygenCommandlet::ReportBlueprints()
 void UBlueprintDoxygenCommandlet::ReportMaterials()
 {
 	if (outputMode & doxygen)
-		wcout << "Parsing  Materials..." << endl;
+		wcout << "Parsing Materials..." << endl;
 
 	for (FAssetData const& Asset : MaterialAssetList)
 	{
@@ -525,7 +535,9 @@ void UBlueprintDoxygenCommandlet::ReportBlueprint(FString prefix, UBlueprint* bl
 		description = description.TrimStartAndEnd();
 
 		UE_LOG(LOG_DOT, Display, TEXT("%sParsing: %s"),	*prefix, *blueprint->GetPathName());
+#if ENGINE_MAJOR_VERSION >= 5
 		UE_LOG(LOG_DOT, Display, TEXT("%sPackage: %s"), *prefix, *package->GetLoadedPath().GetLocalFullPath());
+#endif
 		UE_LOG(LOG_DOT, Display, TEXT("%sName: %s"), *prefix, *package->GetName());
 		UE_LOG(LOG_DOT, Display, TEXT("%sExtends: %s"), *prefix, *(parent->GetPrefixCPP()+parent->GetName()));
 		UE_LOG(LOG_DOT, Display, TEXT("%sDescription: %s"), *prefix, *(description.Replace(TEXT("\\n"),TEXT(" || "))));
@@ -636,7 +648,9 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 		//description = description.TrimStartAndEnd();
 
 		UE_LOG(LOG_DOT, Display, TEXT("%sParsing: %s"), *prefix, *material->GetPathName());
+#if ENGINE_MAJOR_VERSION >= 5
 		UE_LOG(LOG_DOT, Display, TEXT("%sPackage: %s"), *prefix, *package->GetLoadedPath().GetLocalFullPath());
+#endif
 		UE_LOG(LOG_DOT, Display, TEXT("%sName: %s"), *prefix, *package->GetName());
 		UE_LOG(LOG_DOT, Display, TEXT("%sExtends: %s"), *prefix, *parentClass);
 		//UE_LOG(LOG_DOT, Display, TEXT("%sDescription: %s"), *prefix, *(description.Replace(TEXT("\\n"), TEXT(" || "))));
@@ -683,7 +697,7 @@ void UBlueprintDoxygenCommandlet::ReportMaterial(FString prefix, FString assetNa
 			tpngPath = "[OutputDir]" + tpngPath;
 
 			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			wcout << "No Image  " << *tpngPath << endl;
+			wcout << " (missing) " << *tpngPath << endl;
 		}
 		else
 		{
@@ -851,6 +865,7 @@ void UBlueprintDoxygenCommandlet::ReportNode(FString prefix, UEdGraphNode* n)
 		GraphDescriptions.Add(subgraph, brief);
 	}
 
+#if ENGINE_MAJOR_VERSION >= 5
 	UMaterialGraphNode_Composite* subgraph_materialnode = dynamic_cast<UMaterialGraphNode_Composite*>(n);
 	if (subgraph_materialnode)
 	{
@@ -867,6 +882,7 @@ void UBlueprintDoxygenCommandlet::ReportNode(FString prefix, UEdGraphNode* n)
 
 		GraphDescriptions.Add(subgraph, brief);
 	}
+#endif
 
 	if (outputMode & debug)
 	{
@@ -1006,11 +1022,10 @@ bool UBlueprintDoxygenCommandlet::OpenFile(FString fpath, bool append)
 		tpath.RemoveFromStart(outputDir);
 		tpath = "[OutputDir]" + tpath;
 
-		//wcout << "Writing to " << *fpath << endl;
 		if (append)
-			wcout << "Appending " << *tpath << endl;
+			wcout << " Appending " << *tpath << endl;
 		else
-			wcout << "Writing   " << *tpath << endl;
+			wcout << " Writing   " << *tpath << endl;
 	}
 	else
 	{
@@ -1069,7 +1084,14 @@ TMap<FString, FString> UBlueprintDoxygenCommandlet::GetVisiblePins(UEdGraphNode*
 		{
 			//wcout << *info.GetName().ToString() << " :: " << (info.IsVisiblePin(material) ? "true" : "false") << " :: " << *info.GetToolTip().ToString() << endl;
 			if (info.IsVisiblePin(material))
-				visiblePins.Add({ info.GetName().ToString(), info.GetToolTip().ToString() });
+			{
+				//UE4
+				TPair<FString, FString> v(info.GetName().ToString(), info.GetToolTip().ToString());
+				visiblePins.Add(v);
+
+				//UE5
+				//visiblePins.Add({ info.GetName().ToString(), info.GetToolTip().ToString() });
+			}
 		}
 	}
 
@@ -1507,7 +1529,8 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString p
 
 	//wcout << "FNAME: |" << *fullName << "|" << endl;
 
-	FLinkerLoad* Linker = package->LinkerLoad;
+	//FLinkerLoad* Linker = package->LinkerLoad;
+	FLinkerLoad* Linker = package->GetLinker();
 	if (Linker && Linker->SerializeThumbnails(true))
 	{
 		if (Linker->LinkerRoot->HasThumbnailMap())
@@ -1538,7 +1561,7 @@ bool UBlueprintDoxygenCommandlet::CreateThumbnailFile(UObject* object, FString p
 						tpngPath.RemoveFromStart(outputDir);
 						tpngPath = "[OutputDir]" + tpngPath;
 
-						wcout << "Writing   " << *tpngPath << endl;
+						wcout << " Writing   " << *tpngPath << endl;
 
 						const TArray64<uint8>& CompressedByteArray = ImageWrapper->GetCompressed();
 						if (!FFileHelper::SaveArrayToFile(CompressedByteArray, *pngPath))
@@ -1592,7 +1615,7 @@ void UBlueprintDoxygenCommandlet::writeBlueprintHeader(
 			tpngPath = "[OutputDir]" + tpngPath;
 
 			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			wcout << "No Image  " << *tpngPath << endl;
+			wcout << " (missing) " << *tpngPath << endl;
 		}
 		else
 		{
@@ -2102,9 +2125,17 @@ void UBlueprintDoxygenCommandlet::writeMaterialMembers(UMaterial* material, FStr
 		{
 			UMaterialExpression* exp = exps[0];
 
+#if ENGINE_MAJOR_VERSION >= 5
 			EMaterialParameterType ptype = exp->GetParameterType();
 			//UEnum::GetValueAsString(ptype, type);
-
+#else
+			EMaterialParameterType ptype = EMaterialParameterType::Scalar;
+			//FMaterialCachedExpressionData cexp = exp->Material->GetCachedExpressionData();
+			//cexp.Parameters.GetParameterTypeEntry(
+			//FMaterialParameterInfo Meta;
+			//exp->GetParameterValue(Meta)
+			//EMaterialParameterType ptype = Meta.Value.Type;
+#endif
 			switch (ptype)
 			{
 			case EMaterialParameterType::Scalar:
@@ -2113,15 +2144,22 @@ void UBlueprintDoxygenCommandlet::writeMaterialMembers(UMaterial* material, FStr
 			case EMaterialParameterType::Vector:
 				type = "Vector3d";	break;
 
-			case EMaterialParameterType::Texture:
+#if ENGINE_MAJOR_VERSION >= 5
 			case EMaterialParameterType::DoubleVector:
+#endif
+			case EMaterialParameterType::Texture:
 			case EMaterialParameterType::StaticComponentMask:
 			case EMaterialParameterType::RuntimeVirtualTexture:
 				type = "Texture2d";	break;
 
-				//case EMaterialParameterType::StaticSwitch:
+#if ENGINE_MAJOR_VERSION >= 5
+			//case EMaterialParameterType::StaticSwitch:
 			case EMaterialParameterType::NumRuntime:
 			case EMaterialParameterType::Num:
+#else
+			case EMaterialParameterType::Count:
+			case EMaterialParameterType::StaticSwitch:
+#endif
 				type = "int";		break;
 
 			case EMaterialParameterType::Font:
@@ -2816,20 +2854,21 @@ TMap<FString, FString> UBlueprintDoxygenCommandlet::NodeIcons = {
 	{ "spawn",		"&#10038;"	}		// star			&#9733; &#10038; //https://www.amp-what.com/unicode/search/star
 };
 
+typedef TPair<FString, FString> TPSS;
 TMap<FString, TPair<FString,FString> > UBlueprintDoxygenCommandlet::PinIcons = {
 	//{ "example",	{ "conicon", "disicon" } },		// connected/disconnected, or closed/open
-	{ "data",		{ "&#9678;", "&#9673;" } },		// open/closed circle
-	{ "exec",		{ "&#9655;&#65038;", "&#9654;&#65038;" } },					// open/closed right arrow. Uses &#65038; after to request the non-emoji representation.
-	{ "delegate",	{ "&#9634;", "&#9635;" } },		// open/closed box
-	{ "addpin",		{ "&#9678;", "&#9673;" } },		// open/closed circle		// &#8853; &#10753;	//https://www.isthisthingon.org/unicode/index.phtml?page=02&subpage=A
-	{ "container",	{ "&#9920;", "&#9923;" } },		// open/closed barrel thing
-	//{ "array",		{"&#10214;&#9678;&#10215;","&#10214;&#9673;&#10215;"}},	// open/closed square braces
-	{ "array",		{"[&#9678;]","[&#9673;]"}},		// open/closed square braces	&#128992; grid circle thing
-	{ "map",		{"&#10218;&#9638;&#10219;","&#10218;&#9641;&#10219;" } },	// open/closed angle bracket
-	{ "set",		{"&#10100;&#9678;&#10101;","&#10100;&#9673;&#10101;"}},		// open/closed curly braces
-	{ "skull",		{ "&#9760;", "&#9760;" } },		// skull					// to remember
-	{ "coffee",		{ "&#9982;", "&#9982;" } },		// coffee					// to remember
-	{ "dotthing",	{ "&#10690;","&#10690;"} }		// circle dot thing			// to remember
+	{ "data",		TPSS("&#9678;", "&#9673;") },					// open/closed circle
+	{ "exec",		TPSS("&#9655;&#65038;", "&#9654;&#65038;") },	// open/closed right arrow. Uses &#65038; after to request the non-emoji representation.
+	{ "delegate",	TPSS("&#9634;", "&#9635;") },					// open/closed box
+	{ "addpin",		TPSS("&#9678;", "&#9673;") },					// open/closed circle		// &#8853; &#10753;	//https://www.isthisthingon.org/unicode/index.phtml?page=02&subpage=A
+	{ "container",	TPSS("&#9920;", "&#9923;") },					// open/closed barrel thing
+	//{ "array",		{"&#10214;&#9678;&#10215;","&#10214;&#9673;&#10215;"}},		// open/closed square braces
+	{ "array",		TPSS("[&#9678;]","[&#9673;]") },				// open/closed square braces	&#128992; grid circle thing
+	{ "map",		TPSS("&#10218;&#9638;&#10219;","&#10218;&#9641;&#10219;") },	// open/closed angle bracket
+	{ "set",		TPSS("&#10100;&#9678;&#10101;","&#10100;&#9673;&#10101;") },	// open/closed curly braces
+	{ "skull",		TPSS("&#9760;", "&#9760;") },					// skull		// to remember
+	{ "coffee",		TPSS("&#9982;", "&#9982;") },					// coffee		// to remember
+	{ "dotthing",	TPSS("&#10690;","&#10690;") }					// circle dot thing			// to remember
 };
 
 FString UBlueprintDoxygenCommandlet::GetPinColor(UEdGraphPin* pin)
@@ -2977,6 +3016,7 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 				ograph = onode ? onode->GetGraph() : NULL;
 			}
 
+#if ENGINE_MAJOR_VERSION >= 5
 			UMaterialGraphNode_Composite* matcomp = dynamic_cast<UMaterialGraphNode_Composite*>(node);
 			if (matcomp)
 			{
@@ -3014,6 +3054,10 @@ FString UBlueprintDoxygenCommandlet::GetNodeURL(UEdGraphNode* node, EEdGraphPinD
 				else
 					UE_LOG(LOG_DOT, Error, TEXT("Pin can't get a graph or material."));
 			}
+#else
+			void* matcomp = NULL;
+			void* matpin = NULL;
+#endif
 
 			if (!tunnel && !matcomp && !matpin)
 			{
@@ -3624,7 +3668,12 @@ void UBlueprintDoxygenCommandlet::writeNodeBody(FString prefix, UEdGraphNode* n)
 
 	UEdGraphNode_Comment* comment = dynamic_cast<UEdGraphNode_Comment*>(n);
 	FLinearColor titleColor = (comment) ? comment->CommentColor : n->GetNodeTitleColor();
+
+#if ENGINE_MAJOR_VERSION >= 5
 	int commentSize = (comment) ? comment->GetFontSize() : 18;
+#else
+	int commentSize = 18;
+#endif
 
 	//if (type == NodeType::composite)
 	{

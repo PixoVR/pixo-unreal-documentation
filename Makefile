@@ -7,7 +7,7 @@ UECMD = ./Binaries/Win64/UnrealEditor-Cmd.exe
 COMMANDLET = BlueprintDoxygen
 PROJECT = X:\PixoVR\Documentation_5_0\Documentation_5_0.uproject
 LOGGING = -LogCmds="global none, LOG_DOT all" -NoLogTimes
-OUTPUT_DIR = X:\PixoVR\documentation\docs-root\documentation\pages\blueprints2
+OUTPUT_DIR = X:\PixoVR\documentation\docs-root\documentation\pages\blueprints
 OUTPUT_MODE ?= doxygen
 
 # build
