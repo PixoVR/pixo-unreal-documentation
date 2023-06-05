@@ -2,8 +2,8 @@
 	"FileVersion": 3,
 	"Version": 1,
 	"VersionName": "1.0",
-	"FriendlyName": "PixoVR Blueprint Documentation",
-	"Description": "Doxygen Output for Blueprints and Materials",
+	"FriendlyName": "PixoVR Documentation",
+	"Description": "Doxygen output for Unreal plugins. Supports Blueprints and Materials.",
 	"Category": "PixoVR",
 	"CreatedBy": "Chris Healer",
 	"CreatedByURL": "https://pixovr.com",
@@ -16,7 +16,7 @@
 	"Installed": false,
 	"Modules": [
 		{
-			"Name": "PixoBlueprintDocumentation",
+			"Name": "PixoDocumentation",
 			"Type": "Runtime",
 			"LoadingPhase": "Default"
 		}

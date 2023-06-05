@@ -4,7 +4,7 @@ WUE_ENGINE = C:\\Program\ Files\\Epic\ Games\\UE_5.0\\Engine
 
 # run
 UECMD = ./Binaries/Win64/UnrealEditor-Cmd.exe
-COMMANDLET = BlueprintDoxygen
+COMMANDLET = PixoDocumentation
 PROJECT = X:\PixoVR\Documentation_5_0\Documentation_5_0.uproject
 LOGGING = -LogCmds="global none, LOG_DOT all" -NoLogTimes
 OUTPUT_DIR = X:\PixoVR\documentation\docs-root\documentation\pages\blueprints
@@ -13,7 +13,7 @@ OUTPUT_MODE ?= doxygen
 # build
 UATCMD = Build\\BatchFiles\\RunUAT.bat
 PLUGIN_ROOT = X:\\PixoVR\\Documentation_5_0\\Plugins\\pixo-unreal-documentation\\
-PLUGIN = $(PLUGIN_ROOT)\\PixoBlueprintDocumentation.uplugin
+PLUGIN = $(PLUGIN_ROOT)\\PixoDocumentation.uplugin
 PLATFORM = Win64
 #PACKAGE = X:\\PixoVR\\dev\\SDKs\\temp
 PACKAGE = C:\\temp\\build

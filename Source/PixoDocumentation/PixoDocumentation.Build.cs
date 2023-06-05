@@ -2,9 +2,9 @@
 
 using UnrealBuildTool;
 
-public class PixoBlueprintDocumentation : ModuleRules
+public class PixoDocumentation : ModuleRules
 {
-	public PixoBlueprintDocumentation(ReadOnlyTargetRules Target) : base(Target)
+	public PixoDocumentation(ReadOnlyTargetRules Target) : base(Target)
 	{
 		PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
 
@@ -28,7 +28,7 @@ public class PixoBlueprintDocumentation : ModuleRules
 		PublicDependencyModuleNames.AddRange(
 			new string[]
 			{
-				//"Core",
+				"Core",
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -40,14 +40,19 @@ public class PixoBlueprintDocumentation : ModuleRules
 				"Core",
 				"CoreUObject",
 				"Engine",
-				//"Slate",
-				//"SlateCore",
+				"Slate",
+				"SlateCore",
 				"UnrealEd",
+
+				"Projects",
+				//"InputCode",
+				"ToolMenus",
+
 				"BlueprintGraph",
 				"ImageWrapper",
 				//"HTTP",
 				//"Json",
-				"RHI",
+				//"RHI",
 				//"RenderCore",
 				//"Launch"
 				// ... add private dependencies that you statically link with here ...	
