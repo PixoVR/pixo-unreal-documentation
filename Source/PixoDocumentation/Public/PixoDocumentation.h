@@ -4,10 +4,6 @@
 
 #include "CoreMinimal.h"
 
-#include "reporter.h"
-#include "blueprintReporter.h"
-#include "materialReporter.h"
-
 /**
  * @brief The PixoDocumentation class
  *
@@ -33,6 +29,7 @@ public:
 	PixoDocumentation(
 		int		_outputMode,
 		FString	_outputDir,
+		TArray<FString> _includes,
 		FString	_stylesheet,
 		FString	_groups
 	);
@@ -49,6 +46,7 @@ private:
 	int			outputMode;
 	FString		outputDir = "-";			//use "-" for stdout
 	FString		currentDir = "";
+	TArray<FString> includes;
 	FString		stylesheet = "doxygen-pixo.css";	// style applied to dot/svg
 	FString		groups = "groups.dox";			// filename for groups file
 

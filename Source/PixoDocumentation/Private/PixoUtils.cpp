@@ -11,11 +11,24 @@ using namespace PixoUtils;
 
 FString PixoUtils::htmlentities(FString in)
 {
+	//TArray<int> reps = { 34,39,60,61,62 };	// " ' < = >
+	TArray<int> reps = { 34,39 };	// " '
+
 	FString out;
 	for (int i = 0; i < in.Len(); i++)
 	{
-		if (in[i] == '"')			//34
+		if (in[i] == '>')
+			out += TEXT("&gt;");
+		else if (in[i] == '<')
+			out += TEXT("&lt;");
+		//else if (in[i] == '=')
+		//	out += TEXT("&equals;");
+		else if (in[i] == '&')
+			out += TEXT("&amp;");
+		else if (in[i] == '"')			//34
 			out += TEXT("&quot;");
+		else if (reps.Contains(in[i]))
+			out += FString::Printf(TEXT("&#%d;"), (int)in[i]);
 		else if (in[i] > 127)
 			out += FString::Printf(TEXT("&#%d;"), (int)in[i]);
 		else
@@ -545,11 +558,14 @@ FString PixoUtils::getNodeTooltip(UEdGraphNode* node)
 	tooltip = tooltip.Replace(TEXT("\\"), TEXT("\\\\"));
 	tooltip = tooltip.ReplaceQuotesWithEscapedQuotes();
 	tooltip = tooltip.TrimStartAndEnd();
+	tooltip = htmlentities(tooltip);
 	//tooltip = tooltip.Replace(TEXT("\n"), TEXT("<BR/>"));
 	//tooltip = tooltip.Replace(TEXT("\n"), TEXT("\\n"));			//this tooltip is never in html context
 	//tooltip = tooltip.Replace(TEXT("\n"), TEXT("&#10;"));
 	tooltip = tooltip.Replace(TEXT("\r"), TEXT(""));
 	tooltip = tooltip.Replace(TEXT("\n"), TEXT("&#013;"));
+	//tooltip = tooltip.Replace(TEXT("&gt;"), TEXT(">"));
+	//tooltip = tooltip.Replace(TEXT("&lt;"), TEXT("<"));
 	//tooltip = tooltip.Replace(TEXT("\\"), TEXT("\\\\"));
 
 	return tooltip;
@@ -667,9 +683,9 @@ FString PixoUtils::getPinTooltip(UEdGraphPin* p, TMap<FString,FString>visiblePin
 	}
 
 	hover = hover.TrimStartAndEnd();
+	hover = htmlentities(hover);
 	hover = hover.Replace(TEXT("\r"), TEXT(""));
 	hover = hover.Replace(TEXT("\n"), TEXT("&#013;"));
-	hover = htmlentities(hover);
 	//hover = hover.Replace(TEXT("\\"), TEXT("\\\\"));
 	//hover = hover.Replace(TEXT("\""), TEXT("\\\""));
 	return hover;

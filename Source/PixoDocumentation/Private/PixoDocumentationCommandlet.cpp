@@ -46,6 +46,7 @@ int32 UPixoDocumentationCommandlet::Main(const FString& Params)
 	HelpParamNames = {
 		"OutputMode",
 		"OutputDir",
+		"Include",
 		"Stylesheet",
 		"Groups"
 	};
@@ -53,6 +54,7 @@ int32 UPixoDocumentationCommandlet::Main(const FString& Params)
 	HelpParamDescriptions = {
 		"One of: doxygen|verbose|debug.  If not present, execution will halt.",
 		"Path to the output directory, which must exist when this is run.  If not provided, '-' will be used, which means stdout.",
+		"A comma separated list of UFS paths for parsing.  This will be the plugin's module name, eg: \"/PixoDocumentation,/SomeOtherPlugin\"",
 		"The name of a css stylesheet for dot files, which will be embedded into the resulting dot-syntax comments. (default: 'doxygen-pixo.css')",
 		"The name of the groups file, which will contain a gallery of images parsed from the .uasset files. (default: 'groups.dox')"
 	};
@@ -61,7 +63,7 @@ int32 UPixoDocumentationCommandlet::Main(const FString& Params)
 
 	InitCommandLine(Params);
 
-	if (outputMode == OutputMode::none || usage)
+	if (usage)
 	{
 		UE_LOG(LOG_DOT, Error, TEXT("%s"), *HelpUsage);
 		UE_LOG(LOG_DOT, Error, TEXT("Usage:"));
@@ -81,6 +83,7 @@ int32 UPixoDocumentationCommandlet::Main(const FString& Params)
 	PixoDocumentation pd(
 		outputMode,
 		outputDir,
+		includes,
 		stylesheet,
 		groups
 	);
@@ -116,9 +119,7 @@ void UPixoDocumentationCommandlet::InitCommandLine(const FString& Params)
 		Switches.Contains("usage")	)
 		usage = true;
 
-	if (SwitchParams.Contains(TEXT("Stylesheet")))
-		stylesheet = *SwitchParams[TEXT("Stylesheet")];
-
+	outputDir = "-";
 	if (SwitchParams.Contains(TEXT("OutputDir")))
 	{	outputDir = *SwitchParams[TEXT("OutputDir")];
 		outputDir.TrimStartAndEndInline();			//Sorry if you want a directory ending with a space!
@@ -126,6 +127,26 @@ void UPixoDocumentationCommandlet::InitCommandLine(const FString& Params)
 		outputDir.RemoveFromEnd("\\");				//remove dir slash if present
 		//printf("output dir: %s\n", TCHAR_TO_UTF8(*outputDir));
 	}
+
+	if (SwitchParams.Contains(TEXT("Include")))
+	{
+		FString i = *SwitchParams[TEXT("Include")];
+		TArray<FString> _includes;
+		i.ParseIntoArray(_includes,TEXT(","),true);
+		for (FString in : _includes)
+		{
+			includes.Add( in.TrimStartAndEnd() );
+		}
+	}
+
+	if (includes.Num() == 0)
+	{
+		UE_LOG(LOG_DOT, Warning, TEXT("No Include provided..."));
+		usage = true;
+	}
+
+	if (SwitchParams.Contains(TEXT("Stylesheet")))
+		stylesheet = *SwitchParams[TEXT("Stylesheet")];
 
 	if (SwitchParams.Contains(TEXT("Groups")))
 		groups = *SwitchParams[TEXT("Groups")];
@@ -153,6 +174,7 @@ void UPixoDocumentationCommandlet::InitCommandLine(const FString& Params)
 			break;
 
 		default:
+			usage = true;
 			UE_LOG(LOG_DOT, Warning, TEXT("Unknown OutputMode: '%s'..."), *m);
 			break;
 		}

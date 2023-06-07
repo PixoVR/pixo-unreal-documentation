@@ -23,6 +23,7 @@
 
 
 TArray<FString> reporter::IgnoreFolders;
+TArray<FString> reporter::IncludeFolders;
 TArray<FString> reporter::GroupList;
 
 /**
@@ -71,7 +72,7 @@ reporter::reporter(FString _reportType, FString _outputDir, FString _stylesheet,
 	NodeStyle.Add("_COMPOSITEPADDING_", "4");	// 5 ?
 	NodeStyle.Add("_COMPACTCOLOR_", "#888888");
 
-	NodeStyle.Add("_HEIGHTSPACER_", "<font color=\"transparent\" point-size=\"12\">|</font>");
+	NodeStyle.Add("_HEIGHTSPACER_", "<font color=\"transparent\" point-size=\"12\">&thinsp;</font>");
 
 	//outputDir = "-";			//comment this line when not debugging
 	if (outputDir == "-")
@@ -95,7 +96,7 @@ void reporter::loadAssets(FName loadClass)
 
 	AssetRegistryModule.Get().GetAssetsByClass(loadClass, assetList, true);
 
-	LOG("Warning", FString::Printf(TEXT("Found %d blueprints in asset registry."), assetList.Num()));
+	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(),*loadClass.ToString()));
 }
 
 void reporter::report(int &graphCount, int &ignoredCount, int &failedCount)
@@ -218,49 +219,76 @@ FString reporter::getGraphCPP(UEdGraph* graph, FString _namespace)
 	return cpp;
 }
 
+/**
+ * @brief Based on IgnoreFolders and IncludeFolders, check this items path for reporting.
+ * @param Asset The asset to check
+ * @return Boolean if it should be reported
+ *
+ * Ignore is used to do a first cull, and is set in the PixoDocumentation ctor.
+ *
+ * Perhaps in a future version, include will trump ignore, but not for now.
+ * This would imply that someone could include "/Game".
+ */
+
 bool reporter::shouldReportAsset(FAssetData const& Asset)
 {
-	bool bShouldReport = true;
+	//FString path = Asset.GetPackage
+	FString path = Asset.ObjectPath.ToString();
 
-	if (IgnoreFolders.Num() > 0)
+	//wcout << "Checking " << *path << endl;
+
+	for (const FString& IgnoreFolder : IgnoreFolders)
 	{
-		for (const FString& IgnoreFolder : IgnoreFolders)
+		if (path.StartsWith(IgnoreFolder))
 		{
-			if (Asset.ObjectPath.ToString().StartsWith(IgnoreFolder))
-			{
-				//FString const AssetPath = Asset.ObjectPath.ToString();
-				//UE_LOG(LOG_DOT, Display, TEXT("Ignoring %s"), *AssetPath);
-				FString const PackagePath = Asset.ObjectPath.ToString();
-
-				LOG("Warning", FString::Printf(TEXT("Ignoring %s"), *PackagePath));
-
-				bShouldReport = false;
-			}
+			//LOG("Warning", FString::Printf(TEXT("Ignoring %s"), *path));
+			//wcout << "Ignoring " << *path << endl;
+			return false;
 		}
 	}
 
-	return bShouldReport;
+	for (const FString& IncludeFolder : IncludeFolders)
+	{
+		if (path.StartsWith(IncludeFolder))
+			return true;
+	}
+
+	return false;
 }
+
+/**
+ * @brief Based on IgnoreFolders and IncludeFolders, check this object's path for reporting.
+ * @param object The object to check
+ * @return Boolean if it should be reported
+ *
+ * Ignore is used to do a first cull, and is set in the PixoDocumentation ctor.
+ *
+ * Perhaps in a future version, include will trump ignore, but not for now.
+ * This would imply that someone could include "/Game".
+ */
 
 bool reporter::shouldReportObject(UObject* object)
 {
 	if (!object)
 		return false;
 
-	bool bShouldReport = true;
 	FString path = object->GetPathName();
-
 	//wcout << "SRO path: " << *path << endl;
 
 	for (const FString& IgnoreFolder : IgnoreFolders)
 	{
 		if (path.StartsWith(IgnoreFolder))
-			bShouldReport = false;
+			return false;
 	}
 
-	return bShouldReport;
-}
+	for (const FString& IncludeFolder : IncludeFolders)
+	{
+		if (path.StartsWith(IncludeFolder))
+			return true;
+	}
 
+	return false;
+}
 
 void reporter::reportGraph(FString prefix, UEdGraph* g)
 {
@@ -572,6 +600,7 @@ FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FStr
 	FString sname, sport, sside, dname, dport, dside, color, connection;
 	FString rowTemplate;
 	UEdGraphPin *i=NULL, *o=NULL;
+	int c = 0;
 	while (ins.Num() > 0 || outs.Num() > 0)
 	{
 		if (ins.Num())
@@ -701,6 +730,13 @@ FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FStr
 		}
 
 		rows += prepTemplateString("", pindata, rowTemplate)+"\n";
+
+		c++;
+	}
+
+	if (c==0)
+	{
+		rows = "<tr><td></td></tr>";
 	}
 
 	rows.TrimEndInline();
@@ -801,8 +837,11 @@ void reporter::writeAssetFooter()
 	*out << endl;
 }
 
-void reporter::writeAssetCalls()
+void reporter::writeAssetCalls(FString className)
 {
+	*out << endl;
+	*out << "#include \"" << *className << ".h\"" << endl;
+
 	*out << R"PixoVR(
 /*
 	This is fake C++ that doxygen will parse for call graph entries.
@@ -1182,6 +1221,7 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	float numLines = comment.ParseIntoArrayLines(lines, false);			// for bubble
 	//if (numLines == 1)
 	//	comment = comment + "&nbsp;";										//spaces out the bubble
+	comment = htmlentities(comment);
 	comment = comment.Replace(TEXT("\r"), TEXT(""));
 	comment = comment.Replace(TEXT("\n"), TEXT("&nbsp;<br/>"));			// after counting lines
 	hasBubble &= !comment.IsEmpty();										// if the comment is empty, it won't show.
@@ -1329,8 +1369,9 @@ bool reporter::createThumbnailFile(UObject* object, FString pngPath)
 
 	//wcout << "FNAME: |" << *fullName << "|" << endl;
 
-	//FLinkerLoad* Linker = package->LinkerLoad;
-	FLinkerLoad* Linker = package->GetLinker();
+	//FLinkerLoad* Linker = package->GetLinker();	//NO! Won't work.
+	FLinkerLoad* Linker = package->LinkerLoad;
+
 	if (Linker && Linker->SerializeThumbnails(true))
 	{
 		if (Linker->LinkerRoot->HasThumbnailMap())
@@ -1380,7 +1421,7 @@ bool reporter::createThumbnailFile(UObject* object, FString pngPath)
 	}
 	else
 	{
-		UE_LOG(LOG_DOT, Error, TEXT("No linker: '%s'."), *pngPath);
+		//UE_LOG(LOG_DOT, Error, TEXT("No linker: '%s'."), *pngPath);
 	}
 
 	return false;

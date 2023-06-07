@@ -45,6 +45,7 @@ private:
 	bool		usage = false;
 	int			outputMode;
 	FString		outputDir = "-";			//use "-" for stdout
+	TArray<FString>	includes;
 	FString		stylesheet = "doxygen-pixo.css";
 	FString		groups = "groups.dox";			// filename for groups file
 

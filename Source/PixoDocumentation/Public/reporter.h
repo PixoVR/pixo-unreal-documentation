@@ -51,7 +51,8 @@ public:
 	virtual void report(int &graphCount, int &ignoredCount, int &failedCount);
 
 	static TArray<FString>	GroupList;			//the list of groups reported
-	static TArray<FString>	IgnoreFolders;
+	static TArray<FString>	IgnoreFolders;		//folders to ignore
+	static TArray<FString>	IncludeFolders;		//folders to include
 
 protected:
 	FName				reportClassName;
@@ -98,7 +99,7 @@ protected:
 	virtual FString prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FString, FString> visiblePins = TMap<FString, FString>());
 
 	virtual void writeAssetFooter();
-	virtual void writeAssetCalls();
+	virtual void writeAssetCalls(FString className);
 
 	//node stuff
 	FString getNodeURL(UEdGraphNode* node, EEdGraphPinDirection direction = EEdGraphPinDirection::EGPD_MAX);

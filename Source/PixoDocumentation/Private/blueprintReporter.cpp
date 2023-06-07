@@ -138,7 +138,7 @@ int blueprintReporter::reportBlueprint(FString prefix, UBlueprint* blueprint)
 			return -1;
 		}
 
-		writeAssetCalls();
+		writeAssetCalls(className);
 
 		closeFile();		//close .cpp file
 	}
@@ -219,14 +219,13 @@ void blueprintReporter::writeBlueprintHeader(
 		FString pngPath = currentDir + "\\" + pngName;
 		FPaths::MakePlatformFilename(pngPath);
 
+		FString tpngPath = pngPath;
+		tpngPath.RemoveFromStart(outputDir);
+
 		if (!createThumbnailFile(blueprint, pngPath))
 		{
-			FString tpngPath = pngPath;
-			tpngPath.RemoveFromStart(outputDir);
 			tpngPath = "[OutputDir]" + tpngPath;
-
-			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			LOG( " (missing) " + tpngPath );
+			//LOG( " (missing) " + tpngPath );
 			//wcout << " (missing) " << *tpngPath << endl;
 		}
 		else
@@ -235,11 +234,13 @@ void blueprintReporter::writeBlueprintHeader(
 			FString fmt;
 
 			fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
-			imagetag = FString::Format(*fmt, { pngName, className, width });
+			//imagetag = FString::Format(*fmt, { pngName, className, width });
+			imagetag = FString::Format(*fmt, { tpngPath, className, width });
 
 			// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
 			fmt = "\\link {1} &thinsp; \\image html {0} \"{1}\" width={2}px \\endlink";
-			FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
+			//FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
+			FString galleryEntry = FString::Format(*fmt, { tpngPath, className, width });
 			GalleryList.Add(galleryEntry);
 		}
 	}
@@ -268,6 +269,7 @@ void blueprintReporter::writeBlueprintHeader(
 	description = description.TrimStartAndEnd();
 	description = description.Replace(TEXT("\n"), TEXT("\n	"));
 
+	*out << "#pragma once" << endl;
 	*out << "/**" << endl;
 	//*out << "	\\class " << *className << endl;
 	if (!qualifier.IsEmpty())
@@ -300,7 +302,7 @@ void blueprintReporter::writeBlueprintHeader(
 
 	*out << "	\\headerfile " << *className << ".h \"" << *packageName << "\"" << endl;
 	*out << "*/" << endl;
-	*out << "class " << *className << " : " << *parentClass << endl;
+	*out << "class " << *className << " : public " << *parentClass << endl;
 	*out << "{" << endl;
 }
 
@@ -608,7 +610,7 @@ void blueprintReporter::LOG(FString verbosity, FString message)
 	else if (verbosity == "Warning")
 	{
 		//for messages like "Ignoring..."
-		//wcout << "WARNING: " << *message << endl;
+		wcout << "WARNING: " << *message << endl;
 	}
 	else if (verbosity == "Error")
 	{

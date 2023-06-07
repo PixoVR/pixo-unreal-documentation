@@ -11,6 +11,7 @@ using namespace PixoUtils;
  * @brief Constructor for PixoDocumentation.
  * @param _outputMode The output mode: one of: `doxygen`, `verbose`, `debug`.
  * @param _outputDir The path to an output destination.  Use '-' for stdout.
+ * @param _includes The array of allowed asset paths.
  * @param _stylesheet The path/name of a css stylesheet, which doxygen will embed a link to in svg files.
  * @param _groups The name of the groups file, which will default to 'groups.dox'
  *
@@ -20,11 +21,13 @@ using namespace PixoUtils;
 PixoDocumentation::PixoDocumentation(
 	int _outputMode,
 	FString _outputDir,
+	TArray<FString> _includes,
 	FString _stylesheet,
 	FString _groups
 )
 : outputMode(_outputMode)
 , outputDir(_outputDir)
+, includes(_includes)
 , stylesheet(_stylesheet)
 , groups(_groups)
 , totalGraphsProcessed(0)
@@ -32,18 +35,23 @@ PixoDocumentation::PixoDocumentation(
 , totalMaterialsIgnored(0)
 , totalNumFailedLoads(0)
 {
-	reporter::IgnoreFolders.Add("/Engine");
-	reporter::IgnoreFolders.Add("/Game");
+	reporter::IgnoreFolders.Empty();
+	reporter::IgnoreFolders.AddUnique("/Engine");
+	reporter::IgnoreFolders.AddUnique("/Game");
 
 	//IgnoreFolders.Add("/PixoDocumentation");	//ignore our own plugin when not debugging
 
-	//TODO: detect other (unwanted plugins, or specify a specific plugin)
-	//Add an include folder instead of an exclude?
-	reporter::IgnoreFolders.Add("/Bridge");				//plugin
-	reporter::IgnoreFolders.Add("/SpeedtreeImporter");	//plugin
-	reporter::IgnoreFolders.Add("/ResonanceAudio");		//plugin
-	reporter::IgnoreFolders.Add("/MediaCompositing");		//plugin
-	reporter::IgnoreFolders.Add("/AnimationSharing");		//plugin
+	reporter::IncludeFolders.Empty();					//clear this on each run
+	for (FString i : includes)
+	{
+		reporter::IncludeFolders.AddUnique(i);
+	}
+
+	//reporter::IgnoreFolders.Add("/Bridge");				//plugin
+	//reporter::IgnoreFolders.Add("/SpeedtreeImporter");	//plugin
+	//reporter::IgnoreFolders.Add("/ResonanceAudio");		//plugin
+	//reporter::IgnoreFolders.Add("/MediaCompositing");		//plugin
+	//reporter::IgnoreFolders.Add("/AnimationSharing");		//plugin
 
 	if (outputMode & doxygen)
 		wcout << "Output Directory: " << *outputDir << endl;

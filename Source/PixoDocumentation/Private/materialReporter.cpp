@@ -121,14 +121,13 @@ int materialReporter::reportMaterial(FString prefix, UMaterialInterface* materia
 		FString pngPath = currentDir + "\\" + pngName;
 		FPaths::MakePlatformFilename(pngPath);
 
+		FString tpngPath = pngPath;
+		tpngPath.RemoveFromStart(outputDir);
+
 		if (!createThumbnailFile(materialInterface, pngPath))
 		{
-			FString tpngPath = pngPath;
-			tpngPath.RemoveFromStart(outputDir);
-			tpngPath = "[OutputDir]" + tpngPath;
-
-			//UE_LOG(LOG_DOT, Error, TEXT("Could not create thumbnail: '%s'."), *pngPath);
-			LOG( " (missing) " + tpngPath );
+			//tpngPath = "[OutputDir]" + tpngPath;
+			//LOG( " (missing) " + tpngPath );
 			//wcout << " (missing) " << *tpngPath << endl;
 		}
 		else
@@ -137,11 +136,13 @@ int materialReporter::reportMaterial(FString prefix, UMaterialInterface* materia
 			FString fmt;
 
 			fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
-			imageTag = FString::Format(*fmt, { pngName, className, width });
+			//imageTag = FString::Format(*fmt, { pngName, className, width });
+			imageTag = FString::Format(*fmt, { tpngPath, className, width });
 
 			// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
 			fmt = "\\link {1} &thinsp; \\image html {0} \"{1}\" width={2}px \\endlink";
-			FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
+			//FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
+			FString galleryEntry = FString::Format(*fmt, { tpngPath, className, width });
 			GalleryList.Add(galleryEntry);
 		}
 	}
@@ -200,7 +201,7 @@ int materialReporter::reportMaterial(FString prefix, UMaterialInterface* materia
 			return -1;
 		}
 
-		writeAssetCalls();
+		writeAssetCalls(className);
 
 		closeFile();		//close .cpp file
 	}
@@ -433,6 +434,7 @@ void materialReporter::writeMaterialHeader(
 	description += "	" + material->MaterialGraph->RootNode->NodeComment;
 	description = description.TrimStartAndEnd();
 
+	*out << "#pragma once" << endl;
 	*out << "/**" << endl;
 	//*out << "	\\class " << *className << endl;
 	if (!qualifier.IsEmpty())
@@ -462,7 +464,7 @@ void materialReporter::writeMaterialHeader(
 
 	*out << "	\\headerfile " << *className << ".h \"" << *packageName << "\"" << endl;
 	*out << "*/" << endl;
-	*out << "class " << *className << " : " << *parentClass << endl;
+	*out << "class " << *className << " : public " << *parentClass << endl;
 	*out << "{" << endl;
 }
 
