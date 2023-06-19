@@ -156,7 +156,10 @@ bool PixoDocumentation::clearGroups()
 	std::ofstream::openmode mode = std::ofstream::out | std::ofstream::trunc;
 	std::wofstream stream;
 
-	stream.open(*fpath, mode);
+	//stream.open(*fpath, mode);
+
+	std::string sfpath(TCHAR_TO_UTF8(*fpath));
+	stream.open(sfpath, mode);
 
 	if (stream.is_open())
 	{

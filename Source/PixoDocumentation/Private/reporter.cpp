@@ -1436,7 +1436,11 @@ bool reporter::openFile(FString fpath, bool append)
 		mode |= std::ofstream::app;
 
 	std::wofstream* stream = new std::wofstream();
-	stream->open(*fpath, mode);
+	//stream->open(*fpath, mode);
+
+	std::string sfpath(TCHAR_TO_UTF8(*fpath));
+	stream->open(sfpath, mode);
+
 	if (stream->is_open())
 	{
 		out = outfile = stream;

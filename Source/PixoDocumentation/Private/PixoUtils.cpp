@@ -7,6 +7,9 @@
 
 #include "Internationalization/Regex.h"
 
+#include <string>
+using namespace std;
+
 using namespace PixoUtils;
 
 FString PixoUtils::htmlentities(FString in)
@@ -867,14 +870,16 @@ FString PixoUtils::getPinDefaultValue(UEdGraphPin* pin)
 	}
 
 	float r, g, b, a;
-	if (swscanf_s(*v, TEXT("(R=%f,G=%f,B=%f,A=%f)"), &r, &g, &b, &a) == 4)
+	//if (swscanf_s(*v, TEXT("(R=%f,G=%f,B=%f,A=%f)"), &r, &g, &b, &a) == 4)
+	if (swscanf(TCHAR_TO_WCHAR(*v), L"(R=%f,G=%f,B=%f,A=%f)", &r, &g, &b, &a) == 4)
 	{
 		FLinearColor c(r, g, b, a);
 		return FString::Printf(TEXT("<font color=\"%s\">%s</font>"), *createColorString(c), *cicon);
 		//return FString::Printf(TEXT("<font color=\"%0.2f %0.2f %0.2f %0.2f\">%s</font>"), r, g, b, a, *cicon);
 	}
 
-	if (swscanf_s(*v, TEXT("(R=%f,G=%f,B=%f)"), &r, &g, &b) == 3)
+	//if (swscanf_s(*v, TEXT("(R=%f,G=%f,B=%f)"), &r, &g, &b) == 3)
+	if (swscanf(TCHAR_TO_WCHAR(*v), L"(R=%f,G=%f,B=%f)", &r, &g, &b) == 3)
 	{
 		FLinearColor c(r, g, b);
 		return FString::Printf(TEXT("<font color=\"%s\">%s</font>"), *createColorString(c), *cicon);

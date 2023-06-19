@@ -1,0 +1,3 @@
+[submodule "documentation/docs-doxygen"]
+	path = documentation/docs-doxygen
+	url = https://github.com/PixoVR/docs-doxygen.git

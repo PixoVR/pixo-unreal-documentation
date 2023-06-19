@@ -45,7 +45,7 @@ public class PixoDocumentation : ModuleRules
 				"UnrealEd",
 
 				"Projects",
-				//"InputCode",
+				"InputCore",
 				"ToolMenus",
 
 				"BlueprintGraph",
