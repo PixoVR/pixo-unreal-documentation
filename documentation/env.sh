@@ -17,5 +17,6 @@ export DOXYGEN_EXCLUDE=''						# a list of paths to exclude when building.
 export DOXYGEN_STRIP_FROM_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )/../" && pwd)"	# the full absolute path to the root folder to be removed during publish.  This is kind of cosmetic but helps reduce confusion when finding libraries.
 export DOXYGEN_IGNORE_PREFIX='FPixo'					# a class/method/variable prefix to be ignored when alphabetizing.  For instance if everything is pApexSDK, mMatrix, etc, the ignore prefix may want to be "p m" where the list is a whitespace-separated list of prefixes.  The ignore order matters, where longer entries should be first.
 
-
+# user variables.  Useful when writing pages that refer to other urls, but don't want to hardcode them in.
+export PROJECT_PROJECT_DEMO='https://github.com/PixoVR/pixo-unreal-documentation-project.git'
 
