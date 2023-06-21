@@ -32,6 +32,8 @@ class UPixoDocumentationCommandlet : public UCommandlet
 {
 	GENERATED_UCLASS_BODY()
 
+	UPixoDocumentationCommandlet(const FObjectInitializer& ObjectInitializer);
+
 	// Begin UCommandlet Interface
 	virtual int32 Main(const FString& Params) override;
 	// End UCommandlet Interface
