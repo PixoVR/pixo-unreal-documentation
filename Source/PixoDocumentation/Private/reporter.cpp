@@ -1302,7 +1302,7 @@ int reporter::reportBlueprint(FString prefix, UBlueprint* blueprint)
 	TArray<UEdGraph*> graphs;
 	blueprint->GetAllGraphs(graphs);
 
-	UE_LOG(LOG_DOT, Display, TEXT("%sFound %d graph%s..."), *prefix, graphs.Num(), graphs.Num() > 1 ? "s" : "");
+	UE_LOG(LOG_DOT, Display, TEXT("%sFound %d graph%s..."), *prefix, graphs.Num(), graphs.Num() != 1 ? TEXT("s") : TEXT(""));
 
 	for (UEdGraph* g : graphs)
 		reportGraph(prefix, g);
@@ -1354,7 +1354,7 @@ int reporter::reportMaterial(FString prefix, UMaterialInterface* materialInterfa
 	graphs.Add(graph);
 	addAllGraphs(graphs, graph->SubGraphs);
 
-	UE_LOG(LOG_DOT, Display, TEXT("%sFound %d graph%s..."), *prefix, graphs.Num(), graphs.Num() != 1 ? "s" : "");
+	UE_LOG(LOG_DOT, Display, TEXT("%sFound %d graph%s..."), *prefix, graphs.Num(), graphs.Num() != 1 ? TEXT("s") : TEXT(""));
 
 	for (UEdGraph* g : graphs)
 		reportGraph(prefix, g);
