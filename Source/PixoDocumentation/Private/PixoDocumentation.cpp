@@ -53,8 +53,10 @@ PixoDocumentation::PixoDocumentation(
 	//reporter::IgnoreFolders.Add("/MediaCompositing");		//plugin
 	//reporter::IgnoreFolders.Add("/AnimationSharing");		//plugin
 
+	//TCHAR_TO_ANSI
+
 	if (outputMode & doxygen)
-		wcout << "Output Directory: " << TCHAR_TO_ANSI(*outputDir) << endl;
+		cout << "Output Directory: " << *outputDir << endl;
 	else
 		UE_LOG(LOG_DOT, Display, TEXT("Output Directory: %s"), *outputDir);
 }
