@@ -114,7 +114,7 @@ void reporter::report(int &graphCount, int &ignoredCount, int &failedCount)
 			FString const AssetName = Asset.AssetName.ToString();
 			FString const PackagePath = Asset.PackagePath.ToString();
 
-			UE_LOG(LOG_DOT, Warning, TEXT("Loading Blueprint Asset:   '%s'..."), *AssetPath);
+			UE_LOG(LOG_DOT, Warning, TEXT("Loading Asset:   '%s'..."), *AssetPath);
 			UE_LOG(LOG_DOT, Warning, TEXT("Loading Package: '%s'..."), *PackagePath);
 			UE_LOG(LOG_DOT, Warning, TEXT("Asset name: '%s'..."), *AssetName);
 
