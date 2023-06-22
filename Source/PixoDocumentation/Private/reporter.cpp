@@ -1,5 +1,7 @@
 // (c) 2023 PixoVR
 
+#include "Runtime/Launch/Resources/Version.h"
+
 #include "reporter.h"
 
 #include "AssetRegistryModule.h"

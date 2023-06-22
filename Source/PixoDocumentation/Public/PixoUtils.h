@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "Runtime/Launch/Resources/Version.h"
+
 #include "CoreMinimal.h"
 
 /**
@@ -19,6 +21,7 @@
  * cast, so it's not doing any character set conversion.
  */
 
+#if PLATFORM_LINUX
 std::wostream & operator << (std::wostream &out, const TCHAR *c)
 {
 	//cout << "override operator!\n";
@@ -27,6 +30,7 @@ std::wostream & operator << (std::wostream &out, const TCHAR *c)
 	out << TCHAR_TO_WCHAR(c);	//does a cast
     return out;
 }
+#endif
 
 namespace PixoUtils
 {
