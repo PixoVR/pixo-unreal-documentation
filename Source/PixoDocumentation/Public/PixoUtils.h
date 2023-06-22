@@ -4,6 +4,21 @@
 
 #include "CoreMinimal.h"
 
+/**
+ * @brief operator <<
+ * @param out
+ * @param c
+ * @return reference to the incoming wostream
+ *
+ * This is a gross workaround for Linux compilation.  TCHAR*
+ * is not properly handled in Unreal's workaround for C++ stdlib
+ * libraries.  Without this override, TCHAR* is seen as a pointer
+ * and results in hex memory addresses on the stream.
+ *
+ * Note that this will convert a `TCHAR*` to a `wchar_t*` via
+ * cast, so it's not doing any character set conversion.
+ */
+
 std::wostream & operator << (std::wostream &out, const TCHAR *c)
 {
 	//cout << "override!\n";
