@@ -4,8 +4,9 @@
 
 #include "CoreMinimal.h"
 
-ostream & operator << (ostream &out, const TCHAR *c)
+std::wostream & operator << (std::wostream &out, const TCHAR *c)
 {
+	//cout << "override!\n";
 	out << TCHAR_TO_ANSI(c);
     return out;
 }
