@@ -8,7 +8,8 @@ COMMANDLET = PixoDocumentation
 #PROJECT = X:\PixoVR\Documentation_4_27\Documentation_4_27.uproject
 #PROJECT = X:\PixoVR\CE_Pigging\CE_Pigging.uproject
 PROJECT = X:\PixoVR\documentation\docs-docker-ue4-base\project\UE4\Documentation_4_27.uproject
-LOGGING = -LogCmds="global none, LOG_DOT all" -NoLogTimes
+#LOGGING = -LogCmds="global none, LOG_DOT all" -NoLogTimes
+LOGGING =
 #OUTPUT_DIR = X:\PixoVR\documentation\docs-root\documentation\pages\blueprints
 #OUTPUT_DIR = X:\PixoVR\dev\SDKs\UnrealEngineSDK\documentation\generated
 OUTPUT_DIR = X:\PixoVR\temp\docs
