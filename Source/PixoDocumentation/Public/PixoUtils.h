@@ -21,10 +21,10 @@
 
 std::wostream & operator << (std::wostream &out, const TCHAR *c)
 {
-	//cout << "override!\n";
-	//out << TCHAR_TO_ANSI(c);
-	out << TCHAR_TO_WCHAR(c);
-	//out << TCHAR_TO_UTF8(c);
+	//cout << "override operator!\n";
+	//out << TCHAR_TO_ANSI(c);	//does do a conversion
+	//out << TCHAR_TO_UTF8(c);	//does do a conversion
+	out << TCHAR_TO_WCHAR(c);	//does a cast
     return out;
 }
 
