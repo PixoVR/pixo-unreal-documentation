@@ -6,6 +6,7 @@
 
 #include "CoreMinimal.h"
 
+#if PLATFORM_LINUX
 /**
  * @brief operator <<
  * @param out
@@ -21,7 +22,6 @@
  * cast, so it's not doing any character set conversion.
  */
 
-#if PLATFORM_LINUX
 std::wostream & operator << (std::wostream &out, const TCHAR *c)
 {
 	//cout << "override operator!\n";
