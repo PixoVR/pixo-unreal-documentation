@@ -7,7 +7,9 @@
 std::wostream & operator << (std::wostream &out, const TCHAR *c)
 {
 	//cout << "override!\n";
-	out << TCHAR_TO_ANSI(c);
+	//out << TCHAR_TO_ANSI(c);
+	out << TCHAR_TO_WCHAR(c);
+	//out << TCHAR_TO_UTF8(c);
     return out;
 }
 
