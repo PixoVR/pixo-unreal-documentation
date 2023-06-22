@@ -54,7 +54,7 @@ PixoDocumentation::PixoDocumentation(
 	//reporter::IgnoreFolders.Add("/AnimationSharing");		//plugin
 
 	if (outputMode & doxygen)
-		wcout << "Output Directory: " << TEXT(*outputDir) << endl;
+		wcout << "Output Directory: " << TCHAR_TO_ANSI(*outputDir) << endl;
 	else
 		UE_LOG(LOG_DOT, Display, TEXT("Output Directory: %s"), *outputDir);
 }
