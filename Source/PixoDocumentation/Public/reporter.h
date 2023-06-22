@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include "Runtime/Launch/Resources/Version.h"
-
 #include <iostream>
 #include <fstream>
 using namespace std;

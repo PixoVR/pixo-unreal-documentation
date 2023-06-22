@@ -1,8 +1,8 @@
-
-
 // (c) 2023 PixoVR
 
 #pragma once
+
+#include "Runtime/Launch/Resources/Version.h"
 
 #include "materialReporter.h"
 
