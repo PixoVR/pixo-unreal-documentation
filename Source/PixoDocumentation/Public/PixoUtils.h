@@ -4,6 +4,12 @@
 
 #include "CoreMinimal.h"
 
+ostream & operator << (ostream &out, const TCHAR *c)
+{
+	out << TCHAR_TO_ANSI(c);
+    return out;
+}
+
 namespace PixoUtils
 {
 	typedef TMap<FString, FString> vmap;	//name value pairs
