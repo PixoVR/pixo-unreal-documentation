@@ -141,7 +141,7 @@ void UPixoDocumentationCommandlet::InitCommandLine(const FString& Params)
 
 	if (includes.Num() == 0)
 	{
-		UE_LOG(LOG_DOT, Warning, TEXT("No Include provided..."));
+		UE_LOG(LOG_DOT, Warning, TEXT("No '-Includes' provided.  Exiting."));
 		usage = true;
 	}
 
