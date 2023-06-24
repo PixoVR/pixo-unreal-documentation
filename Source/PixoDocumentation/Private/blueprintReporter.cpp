@@ -4,6 +4,8 @@
 
 #include "blueprintReporter.h"
 
+#include "Runtime/Launch/Resources/Version.h"
+
 blueprintReporter::blueprintReporter(FString _outputDir, FString _stylesheet, FString _groups)
 : reporter("blueprints", _outputDir, _stylesheet, _groups)
 {
