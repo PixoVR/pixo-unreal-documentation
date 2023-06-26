@@ -7,12 +7,12 @@ UECMD = ./Binaries/Win64/UE4Editor-Cmd.exe
 COMMANDLET = PixoDocumentation
 #PROJECT = X:\PixoVR\Documentation_4_27\Documentation_4_27.uproject
 #PROJECT = X:\PixoVR\CE_Pigging\CE_Pigging.uproject
-PROJECT = X:\PixoVR\documentation\docs-docker-ue4-base\project\UE4\Documentation_4_27.uproject
+PROJECT = P:\PixoVR\documentation\docs-docker-ue4-base\project\Documentation_4_27.uproject
 LOGGING = -LogCmds="global none, LOG_DOT all" -NoLogTimes
 #LOGGING =
 #OUTPUT_DIR = X:\PixoVR\documentation\docs-root\documentation\pages\blueprints
 #OUTPUT_DIR = X:\PixoVR\dev\SDKs\UnrealEngineSDK\documentation\generated
-OUTPUT_DIR = X:\PixoVR\temp\docs
+OUTPUT_DIR = P:\PixoVR\temp\docs
 OUTPUT_MODE ?= doxygen
 #INCLUDE = /PixoDocumentation	#can be a comma list
 #INCLUDE = /PixoCore,/PixoLobby,/PixoTutorial
@@ -20,7 +20,7 @@ INCLUDE = /PixoCore,/PixoLobby
 
 # build
 UATCMD = Build\\BatchFiles\\RunUAT.bat
-PLUGIN_ROOT = X:\\PixoVR\\Documentation_4_27\\Plugins\\pixo-unreal-documentation\\
+PLUGIN_ROOT = P:\\PixoVR\\Documentation_4_27\\Plugins\\pixo-unreal-documentation\\
 PLUGIN = $(PLUGIN_ROOT)\\PixoDocumentation.uplugin
 PLATFORM = Win64
 #PACKAGE = X:\\PixoVR\\dev\\SDKs\\temp
@@ -29,7 +29,8 @@ PACKAGE = C:\\temp\\build
 all: run
 
 build:
-	@cmd.exe /k $(WUE_ENGINE)\\$(UATCMD) BuildPlugin -plugin="$(PLUGIN)" -package="$(PACKAGE)" -TargetPlatforms=$(PLATFORM) && exit || exit
+	#@cmd.exe /k $(WUE_ENGINE)\\$(UATCMD) BuildPlugin -plugin="$(PLUGIN)" -package="$(PACKAGE)" -TargetPlatforms=$(PLATFORM) && exit || exit
+	@cmd.exe /k $(WUE_ENGINE)\\$(UATCMD) BuildEditor -project="$(PROJECT)" -notools && exit || exit
 
 run:
 	@make commandlet OUTPUT_MODE=doxygen
