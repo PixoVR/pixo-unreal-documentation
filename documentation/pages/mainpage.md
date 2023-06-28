@@ -1,4 +1,4 @@
-\mainpage About the SDK
+\mainpage About the Plugin
 
 This is an Unreal Engine plugin which will scan a project in search of Blueprints and Materials and publish them as parseable (fake) C++ code that can be fed into doxygen to produce documentation.
 
@@ -6,7 +6,7 @@ This has been tested with Unreal Version **4.27** and **5.x**.  The code should 
 
 Graphs are published using graphviz dot syntax, which creates an SVG representation of Unreal graph structures.
 
-In the future, more graph types will be included.  Behavior Trees, for example.
+In the future, more graph types will be included.  Behavior Trees and Audio Mixers, for example.
 
  - Github Repo: $(PROJECT_REPO)
  - Builder Repo: $(PROJECT_BUILDER_REPO)

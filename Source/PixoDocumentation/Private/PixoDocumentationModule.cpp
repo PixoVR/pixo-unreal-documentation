@@ -11,7 +11,7 @@
 
 #include "Dialogs/SOutputLogDialog.h"
 
-static const FName PixoDocumentationTabName("PixoDocumentation");
+static const FName PixoDocumentationTabName("pDocumentation");
 
 #define LOCTEXT_NAMESPACE "FPixoDocumentationModule"
 

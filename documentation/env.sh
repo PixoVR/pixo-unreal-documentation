@@ -1,12 +1,13 @@
 #!/bin/bash
 
-export PROJECT_NAME='Pixo Unreal BP Docs'				# should be short enough to fit on the documentation page
+export PROJECT_NAME='pDocumentation'					# should be short enough to fit on the documentation page
+export MENU_WEIGHT=1
 export PROJECT_VERSION=`cd ../; git tag | tail -n 1`			# the last tagged version
-export PROJECT_BRIEF='Unreal blueprints and materials in doxygen.'	# a brief description of the SDK or module
+export PROJECT_BRIEF='Document graphs in doxygen'			# a brief description of the SDK or module
 export PROJECT_STATUS='active'						# project status, for publishing.  Recognized choices are 'active' (default if not present), 'inactive' (invisable and won't appear in the documentation menu), 'deprecated' (visible in menu, but marked deprecated)
-export PROJECT_LOGO='docs-doxygen/doxygen-custom/defaultIcon.png'	# an icon for the submodule, or 'docs-doxygen/doxygen-custom/defaultIcon.png'.  Path is relative to the folder containing `build.sh`.
+export PROJECT_LOGO='documentationIcon.png'				# an icon for the submodule, or 'docs-doxygen/doxygen-custom/defaultIcon.png'.  Path is relative to the folder containing `build.sh`.
 export PROJECT_REPO='https://github.com/PixoVR/pixo-unreal-documentation' # the project repo url, for cloning
-export PROJECT_URL='/UnrealDocumentation'				# subfolder used for documentation: 'https://docs.pixovr.com/SomeSDK-Target', like 'ApexSDK-Unreal'
+export PROJECT_URL='/pDocumentation'					# subfolder used for documentation: 'https://docs.pixovr.com/SomeSDK-Target', like 'ApexSDK-Unreal'
 export DEV_PROJECT_URL='../../../../Unreal/pixo-unreal-documentation/documentation/html/index.html'	# a url for local development, which is used when `docs-root` is publishing on a local system via `DEV=true ./build.sh`.  This will usually just be to replace `SomeSDK-Target` with the repo name.
 export PROJECT_MAIN_PAGE='../pages/mainpage.md'				# the main home markdown page for the documentation
 
