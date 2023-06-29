@@ -88,63 +88,60 @@ int materialReporter::reportMaterial(FString prefix, UMaterialInterface* materia
 	//each graph will make calls to nodes and variables.  Clear these before we report each blueprint.
 	GraphCalls.Empty();
 
-	if (outputDir != "-")
+	IPlatformFile& platformFile = FPlatformFileManager::Get().GetPlatformFile();
+	subDir = package->GetName();				//get the full UDF path
+	subDir = FPaths::GetPath(subDir);			//chop the "file" entry off
+	subDir.RemoveFromStart("/");				//remove prefix slash from UFS path
+	currentDir = outputDir + "/" + subDir;		//jam it all together
+	FPaths::NormalizeDirectoryName(currentDir);	//fix/normalize the slashes
+
+	// Directory Exists?
+	//FPaths::DirectoryExists(dir);
+	if (!platformFile.DirectoryExists(*currentDir))
 	{
-		IPlatformFile& platformFile = FPlatformFileManager::Get().GetPlatformFile();
-		subDir = package->GetName();				//get the full UDF path
-		subDir = FPaths::GetPath(subDir);			//chop the "file" entry off
-		subDir.RemoveFromStart("/");				//remove prefix slash from UFS path
-		currentDir = outputDir + "/" + subDir;		//jam it all together
-		FPaths::NormalizeDirectoryName(currentDir);	//fix/normalize the slashes
-
-		// Directory Exists?
-		//FPaths::DirectoryExists(dir);
-		if (!platformFile.DirectoryExists(*currentDir))
+		if (!platformFile.CreateDirectoryTree(*currentDir))
 		{
-			if (!platformFile.CreateDirectoryTree(*currentDir))
-			{
-				UE_LOG(LOG_DOT, Error, TEXT("Could not create folder: %s"), *currentDir);
-				return -1;
-			}
-		}
-
-		path = currentDir + "/" + className + ".h";
-		FPaths::MakePlatformFilename(path);				//clean slashes
-		if (!openFile(path))
-		{
-			UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
+			UE_LOG(LOG_DOT, Error, TEXT("Could not create folder: %s"), *currentDir);
 			return -1;
 		}
+	}
 
-		//create image, if possible
-		FString pngName = className + ".png";
-		FString pngPath = currentDir + "\\" + pngName;
-		FPaths::MakePlatformFilename(pngPath);
+	path = currentDir + "/" + className + ".h";
+	FPaths::MakePlatformFilename(path);				//clean slashes
+	if (!openFile(path))
+	{
+		UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
+		return -1;
+	}
 
-		FString tpngPath = pngPath;
-		tpngPath.RemoveFromStart(outputDir);
+	//create image, if possible
+	FString pngName = className + ".png";
+	FString pngPath = currentDir + "\\" + pngName;
+	FPaths::MakePlatformFilename(pngPath);
 
-		if (!createThumbnailFile(materialInterface, pngPath))
-		{
-			//tpngPath = "[OutputDir]" + tpngPath;
-			//LOG( " (missing) " + tpngPath );
-			//wcout << " (missing) " << *tpngPath << endl;
-		}
-		else
-		{
-			int width = 256;
-			FString fmt;
+	FString tpngPath = pngPath;
+	tpngPath.RemoveFromStart(outputDir);
 
-			fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
-			//imageTag = FString::Format(*fmt, { pngName, className, width });
-			imageTag = FString::Format(*fmt, { tpngPath, className, width });
+	if (!createThumbnailFile(materialInterface, pngPath))
+	{
+		//tpngPath = "[OutputDir]" + tpngPath;
+		//LOG( " (missing) " + tpngPath );
+		//wcout << " (missing) " << *tpngPath << endl;
+	}
+	else
+	{
+		int width = 256;
+		FString fmt;
 
-			// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
-			fmt = "\\link {1} &thinsp; \\image html {0} \"{1}\" width={2}px \\endlink";
-			//FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
-			FString galleryEntry = FString::Format(*fmt, { tpngPath, className, width });
-			GalleryList.Add(galleryEntry);
-		}
+		fmt = "\\image{inline} html {0} \"{1}\" width={2}px";
+		//imageTag = FString::Format(*fmt, { pngName, className, width });
+		imageTag = FString::Format(*fmt, { tpngPath, className, width });
+
+		// \link ABP_ActorTest_C &thinsp; \image html ABP_ActorTest_C.png "ABP_ActorTest_C" width=256px \endlink
+		fmt = "\\link {1} &thinsp; \\image html {0} \"{1}\" width={2}px \\endlink";
+		//FString galleryEntry = FString::Format(*fmt, { pngName, className, width });
+		FString galleryEntry = FString::Format(*fmt, { tpngPath, className, width });
+		GalleryList.Add(galleryEntry);
 	}
 
 	TArray<UEdGraph*> graphs;
@@ -182,29 +179,26 @@ int materialReporter::reportMaterial(FString prefix, UMaterialInterface* materia
 	for (UEdGraph* g : graphs)
 		reportGraph(prefix, g);
 
-	if (outputDir != "-")
+	if (graphs.Num())
 	{
-		if (graphs.Num())
-		{
-//			*out << "	///@}" << endl;
-		}
-
-		writeAssetFooter();
-
-		closeFile();		//close .h file
-
-		path = currentDir + "/" + className + ".cpp";
-		FPaths::MakePlatformFilename(path);				//clean slashes
-		if (!openFile(path))
-		{	
-			UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
-			return -1;
-		}
-
-		writeAssetCalls(className);
-
-		closeFile();		//close .cpp file
+//		*out << "	///@}" << endl;
 	}
+
+	writeAssetFooter();
+
+	closeFile();		//close .h file
+
+	path = currentDir + "/" + className + ".cpp";
+	FPaths::MakePlatformFilename(path);				//clean slashes
+	if (!openFile(path))
+	{	
+		UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
+		return -1;
+	}
+
+	writeAssetCalls(className);
+
+	closeFile();		//close .cpp file
 
 	currentMaterialInterface = NULL;
 
@@ -621,7 +615,7 @@ void materialReporter::writeMaterialMembers(UMaterial* material, FString what)
 			}
 
 			for (FString v : k.Value)
-				*out << "	" << *v << endl;
+				*out << *FString("	") << *v << endl;
 
 //			if (k.Key != "Default")
 //				*out << "	///@}" << endl;

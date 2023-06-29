@@ -74,33 +74,30 @@ int blueprintReporter::reportBlueprint(FString prefix, UBlueprint* blueprint)
 	//each graph will make calls to nodes and variables.  Clear these before we report each blueprint.
 	GraphCalls.Empty();
 
-	if (outputDir != "-")
+	IPlatformFile& platformFile = FPlatformFileManager::Get().GetPlatformFile();
+	subDir = package->GetName();				//get the full UDF path
+	subDir = FPaths::GetPath(subDir);			//chop the "file" entry off
+	subDir.RemoveFromStart("/");				//remove prefix slash from UFS path
+	currentDir = outputDir + "/" + subDir;		//jam it all together
+	FPaths::NormalizeDirectoryName(currentDir);	//fix/normalize the slashes
+
+	// Directory Exists?
+	//FPaths::DirectoryExists(dir);
+	if (!platformFile.DirectoryExists(*currentDir))
 	{
-		IPlatformFile& platformFile = FPlatformFileManager::Get().GetPlatformFile();
-		subDir = package->GetName();				//get the full UDF path
-		subDir = FPaths::GetPath(subDir);			//chop the "file" entry off
-		subDir.RemoveFromStart("/");				//remove prefix slash from UFS path
-		currentDir = outputDir + "/" + subDir;		//jam it all together
-		FPaths::NormalizeDirectoryName(currentDir);	//fix/normalize the slashes
-
-		// Directory Exists?
-		//FPaths::DirectoryExists(dir);
-		if (!platformFile.DirectoryExists(*currentDir))
+		if (!platformFile.CreateDirectoryTree(*currentDir))
 		{
-			if (!platformFile.CreateDirectoryTree(*currentDir))
-			{
-				UE_LOG(LOG_DOT, Error, TEXT("Could not create folder: %s"),*currentDir);
-				return -1;
-			}
-		}
-
-		path = currentDir + "/" + className + ".h";
-		FPaths::MakePlatformFilename(path);				//clean slashes
-		if (!openFile(path))
-		{
-			UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
+			UE_LOG(LOG_DOT, Error, TEXT("Could not create folder: %s"),*currentDir);
 			return -1;
 		}
+	}
+
+	path = currentDir + "/" + className + ".h";
+	FPaths::MakePlatformFilename(path);				//clean slashes
+	if (!openFile(path))
+	{
+		UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
+		return -1;
 	}
 
 	TArray<UEdGraph*> graphs;
@@ -121,29 +118,26 @@ int blueprintReporter::reportBlueprint(FString prefix, UBlueprint* blueprint)
 	for (UEdGraph* g : graphs)
 		reportGraph(prefix, g);
 
-	if (outputDir != "-")
+	if (graphs.Num())
 	{
-		if (graphs.Num())
-		{
-//			*out << "	///@}" << endl;
-		}
-
-		writeAssetFooter();
-
-		closeFile();		//close .h file
-
-		path = currentDir + "/" + className + ".cpp";
-		FPaths::MakePlatformFilename(path);				//clean slashes
-		if (!openFile(path))
-		{
-			UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
-			return -1;
-		}
-
-		writeAssetCalls(className);
-
-		closeFile();		//close .cpp file
+//		*out << "	///@}" << endl;
 	}
+
+	writeAssetFooter();
+
+	closeFile();		//close .h file
+
+	path = currentDir + "/" + className + ".cpp";
+	FPaths::MakePlatformFilename(path);				//clean slashes
+	if (!openFile(path))
+	{
+		UE_LOG(LOG_DOT, Error, TEXT("Could not open '%s' for writing."), *path);
+		return -1;
+	}
+
+	writeAssetCalls(className);
+
+	closeFile();		//close .cpp file
 
 	return graphs.Num();
 }
@@ -483,7 +477,7 @@ void blueprintReporter::writeBlueprintMembers(UBlueprint* blueprint, FString wha
 		//isPrivate = flags & EPropertyFlags::CPF_NativeAccessSpecifierPrivate;
 
 		//FString e = FString::Printf(TEXT("%s%s %s = \"%s\";\t//!< %s"),
-		//	isConst ? "const " : "",
+		//	isConst ? TEXT("const ") : TEXT(""),
 		//	*type,
 		//	*variableName,
 		//	*initializer,
@@ -491,7 +485,7 @@ void blueprintReporter::writeBlueprintMembers(UBlueprint* blueprint, FString wha
 		//);
 
 		FString e = FString::Printf(TEXT("%s%s %s;\t//!< %s"),
-			isConst ? "const " : "",
+			isConst ? TEXT("const ") : TEXT(""),
 			*type,
 			*variableName,
 			*description

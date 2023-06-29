@@ -20,14 +20,18 @@
  *
  * Note that this will convert a `TCHAR*` to a `wchar_t*` via
  * cast, so it's not doing any character set conversion.
+ * 
+ * \note When creating FString values with FString::Printf(),
+ * make sure that any '%s' arguments use `TEXT(...)` for literal
+ * values.  Unreal compiles are not portable without doing this!
  */
-
 std::wostream & operator << (std::wostream &out, const TCHAR *c)
 {
 	//cout << "override operator!\n";
 	//out << TCHAR_TO_ANSI(c);	//does do a conversion
 	//out << TCHAR_TO_UTF8(c);	//does do a conversion
 	out << TCHAR_TO_WCHAR(c);	//does a cast
+
     return out;
 }
 #endif
