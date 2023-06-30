@@ -36,24 +36,15 @@ PixoDocumentation::PixoDocumentation(
 , totalNumFailedLoads(0)
 {
 	reporter::IgnoreFolders.Empty();
-	reporter::IgnoreFolders.AddUnique("/Engine");
-	reporter::IgnoreFolders.AddUnique("/Game");
-
-	//IgnoreFolders.Add("/PixoDocumentation");	//ignore our own plugin when not debugging
+	//reporter::IgnoreFolders.AddUnique("/Engine");
+	//reporter::IgnoreFolders.AddUnique("/Game");
+	//IgnoreFolders.Add("/PixoDocumentation");	//ignore our own plugin?
 
 	reporter::IncludeFolders.Empty();					//clear this on each run
 	for (FString i : includes)
 	{
 		reporter::IncludeFolders.AddUnique(i);
 	}
-
-	//reporter::IgnoreFolders.Add("/Bridge");				//plugin
-	//reporter::IgnoreFolders.Add("/SpeedtreeImporter");	//plugin
-	//reporter::IgnoreFolders.Add("/ResonanceAudio");		//plugin
-	//reporter::IgnoreFolders.Add("/MediaCompositing");		//plugin
-	//reporter::IgnoreFolders.Add("/AnimationSharing");		//plugin
-
-	//TCHAR_TO_ANSI
 
 	if (outputMode & doxygen)
 		wcout << "Output Directory: " << *outputDir << endl;

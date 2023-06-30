@@ -242,11 +242,7 @@ bool reporter::shouldReportAsset(FAssetData const& Asset)
 	for (const FString& IgnoreFolder : IgnoreFolders)
 	{
 		if (path.StartsWith(IgnoreFolder))
-		{
-			//LOG("Warning", FString::Printf(TEXT("Ignoring %s"), *path));
-			//wcout << "Ignoring " << *path << endl;
 			return false;
-		}
 	}
 
 	for (const FString& IncludeFolder : IncludeFolders)
