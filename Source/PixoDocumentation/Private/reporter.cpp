@@ -1222,6 +1222,7 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	comment = htmlentities(comment);
 	comment = comment.Replace(TEXT("\r"), TEXT(""));
 	comment = comment.Replace(TEXT("\n"), TEXT("&nbsp;<br/>"));			// after counting lines
+	comment = comment.IsEmpty() ? "&nbsp;" : comment;
 	hasBubble &= !comment.IsEmpty();										// if the comment is empty, it won't show.
 
 	//wcout << "FTITLE: " << *title << " ## " << hasBubble << " * " << (mn?1:0) << " ## " << *comment << endl;
