@@ -445,7 +445,7 @@ _NODENAME_ [
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table bgcolor="_HEADERCOLORTRANS_" border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_" width="_WIDTH_" height="_HEIGHT_">
 				<tr>
-					<td align="left" height="0" width="_WIDTH_" bgcolor="_HEADERCOLOR_" port="comment"><font point-size="_FONTSIZECOMMENT_"><b>_NODECOMMENT_</b></font></td>
+					<td align="left" balign="left" height="0" width="_WIDTH_" bgcolor="_HEADERCOLOR_" port="comment"><font point-size="_FONTSIZECOMMENT_"><b>_NODECOMMENT_</b></font></td>
 				</tr>
 				<hr/>
 				<tr>
