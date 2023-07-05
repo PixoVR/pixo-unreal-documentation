@@ -184,7 +184,17 @@ FString PixoUtils::prepTemplateString(FString prefix, vmap style, FString string
 	for (auto& e : style)
 		h = h.Replace(*e.Key, *e.Value);
 
-	//replace empty font tag
+	//clean up any empty <i> tags from replacement
+	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));	//for nodes missing a second line
+	h = h.Replace(TEXT("<br/>&nbsp;<i></i>"), TEXT(""));							//for nodes missing a second line
+	h = h.Replace(TEXT("<br/><i></i>"), TEXT(""));									//for nodes missing a second line
+	h = h.Replace(TEXT("<b></b>"), TEXT(""));
+
+	h = h.Replace(TEXT("\r"), *(TEXT("") + prefix));
+	h = h.Replace(TEXT("\n"), *(TEXT("\n") + prefix));
+	//h = h.Replace(TEXT("\\"), *(TEXT("\\\\") + prefix));
+
+		//replace empty font tag
 	FRegexPattern emptyFont(TEXT("<font [^<]*><\\/font>"));
 	FRegexMatcher matcher(emptyFont, h);
 	TArray<FString> m;
@@ -196,16 +206,6 @@ FString PixoUtils::prepTemplateString(FString prefix, vmap style, FString string
 	}
 	for (FString s : m)
 		h = h.Replace(*s, TEXT(""));
-
-	//clean up any empty <i> tags from replacement
-	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));	//for nodes missing a second line
-	h = h.Replace(TEXT("<br/>&nbsp;<i></i>"), TEXT(""));							//for nodes missing a second line
-	h = h.Replace(TEXT("<br/><i></i>"), TEXT(""));									//for nodes missing a second line
-	h = h.Replace(TEXT("<b></b>"), TEXT(""));
-
-	h = h.Replace(TEXT("\r"), *(TEXT("") + prefix));
-	h = h.Replace(TEXT("\n"), *(TEXT("\n") + prefix));
-	//h = h.Replace(TEXT("\\"), *(TEXT("\\\\") + prefix));
 
 	return h;
 }
