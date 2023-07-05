@@ -1222,8 +1222,8 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	comment = htmlentities(comment);
 	comment = comment.Replace(TEXT("\r"), TEXT(""));
 	comment = comment.Replace(TEXT("\n"), TEXT("&nbsp;<br/>"));			// after counting lines
+	hasBubble &= !comment.IsEmpty();									// if the comment is empty, it won't show.
 	comment = comment.IsEmpty() ? "&nbsp;" : comment;
-	hasBubble &= !comment.IsEmpty();										// if the comment is empty, it won't show.
 
 	//wcout << "FTITLE: " << *title << " ## " << hasBubble << " * " << (mn?1:0) << " ## " << *comment << endl;
 
@@ -1258,7 +1258,7 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	if (hasBubble)
 	{
 		float lineHeight = 22.0f;
-		float margin = 29.0f;
+		float margin = 24.0f;
 
 		//float cposx = posx + (type==NodeType::route ? -.228f : 0.0f);	//&reg;
 		float cposx = posx + (type == NodeType::route ? -.226f : 0.0f);	//&#10752;
