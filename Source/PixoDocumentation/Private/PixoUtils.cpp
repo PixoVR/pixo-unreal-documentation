@@ -185,7 +185,7 @@ FString PixoUtils::prepTemplateString(FString prefix, vmap style, FString string
 		h = h.Replace(*e.Key, *e.Value);
 
 	//clean up any empty <i> tags from replacement
-	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));	//for nodes missing a second line
+	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;;<i></i>"), TEXT(""));	//for nodes missing a second line
 	h = h.Replace(TEXT("<br/>&nbsp;<i></i>"), TEXT(""));							//for nodes missing a second line
 	h = h.Replace(TEXT("<br/><i></i>"), TEXT(""));									//for nodes missing a second line
 	h = h.Replace(TEXT("<b></b>"), TEXT(""));
@@ -343,7 +343,7 @@ _NODENAME_ [
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
 				<tr>
-					<td colspan="3" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
+					<td colspan="3" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
 					<td colspan="1" align="right" balign="right" width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="delegate">_HEIGHTSPACER__NODEDELEGATE_</td>
 				</tr>
 				<hr/>
@@ -367,7 +367,7 @@ _NODENAME_ [
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
 				<tr>
-					<td colspan="4" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b></td>
+					<td colspan="4" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLORDIM_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
 				</tr>
 				<hr/>
 _PORTROWS_
@@ -397,7 +397,7 @@ _NODENAME_ [
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
 				<tr>
-					<td colspan="3" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLOR_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
+					<td colspan="3" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLOR_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
 					<td colspan="1" align="right" balign="right" width="1" height="0" bgcolor="_HEADERCOLOR_" port="delegate">_HEIGHTSPACER__NODEDELEGATE_</td>
 				</tr>
 				<hr/>
@@ -421,7 +421,7 @@ _NODENAME_ [
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
 			<table bgcolor='_NODECOLOR_' border="1" cellborder="0" cellspacing="0" cellpadding="_CELLPADDING_">
 				<tr>
-					<td colspan="4" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLOR_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
+					<td colspan="4" align="left"  balign="left"  width="1" height="0" bgcolor="_HEADERCOLOR_" port="icon"    ><b>_NODEICON__HEIGHTSPACER__NODETITLE__HEIGHTSPACER_&nbsp;</b><br/>&nbsp;&nbsp;&nbsp;&nbsp;<i>_NODETITLE2_</i></td>
 				</tr>
 				<hr/>
 _PORTROWS_
