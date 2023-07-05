@@ -199,8 +199,9 @@ FString PixoUtils::prepTemplateString(FString prefix, vmap style, FString string
 
 	//clean up any empty <i> tags from replacement
 	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));	//for nodes missing a second line
-	h = h.Replace(TEXT("<br/>&nbsp;<i></i>"), TEXT(""));									//for nodes missing a second line
+	h = h.Replace(TEXT("<br/>&nbsp;<i></i>"), TEXT(""));							//for nodes missing a second line
 	h = h.Replace(TEXT("<br/><i></i>"), TEXT(""));									//for nodes missing a second line
+	h = h.Replace(TEXT("<b></b>"), TEXT(""));
 
 	h = h.Replace(TEXT("\r"), *(TEXT("") + prefix));
 	h = h.Replace(TEXT("\n"), *(TEXT("\n") + prefix));
@@ -792,8 +793,8 @@ FString PixoUtils::getPinPort(UEdGraphPin* p)
 	UEdGraphNode* n = p->GetOwningNode();
 	bool isRoute = getNodeType(n, NodeType::node) == NodeType::route;
 
-	if (isDelegatePin(p))	return "delegate";
 	if (isRoute)			return "port";
+	if (isDelegatePin(p))	return "delegate";
 
 	return "P_"+p->PinId.ToString();
 }
