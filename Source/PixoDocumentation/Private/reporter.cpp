@@ -1258,7 +1258,7 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	if (hasBubble)
 	{
 		float lineHeight = 22.0f;
-		float margin = 24.0f;
+		float margin = 22.0f;
 
 		//float cposx = posx + (type==NodeType::route ? -.228f : 0.0f);	//&reg;
 		float cposx = posx + (type == NodeType::route ? -.226f : 0.0f);	//&#10752;

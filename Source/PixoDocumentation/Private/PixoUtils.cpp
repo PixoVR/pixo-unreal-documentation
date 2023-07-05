@@ -518,7 +518,7 @@ _NODENAME__comment [
 					<td align="left" balign="left" port="comment"><font point-size="_FONTSIZEBUBBLE_">_NODECOMMENT_</font>&nbsp;</td>
 				</tr>
 				<tr>
-					<td align="left" cellpadding="0" cellspacing="0" fixedsize="true" width="40" height="1"><font color="_BORDERCOLOR_" point-size="13">&nbsp;&nbsp;&nbsp;&nbsp;&#9660;</font></td>
+					<td align="left" cellpadding="0" cellspacing="0" fixedsize="true" width="40" height="1"><font color="_BORDERCOLOR_" point-size="12">&nbsp;&nbsp;&nbsp;&nbsp;&#9660;</font></td>
 				</tr>
 			</table>
 		</td></tr></table>
