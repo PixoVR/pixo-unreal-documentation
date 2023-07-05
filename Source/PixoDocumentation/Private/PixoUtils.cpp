@@ -185,7 +185,7 @@ FString PixoUtils::prepTemplateString(FString prefix, vmap style, FString string
 		h = h.Replace(*e.Key, *e.Value);
 
 	//clean up any empty <i> tags from replacement
-	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;;<i></i>"), TEXT(""));	//for nodes missing a second line
+	h = h.Replace(TEXT("<br/>&nbsp;&nbsp;&nbsp;&nbsp;<i></i>"), TEXT(""));	//for nodes missing a second line
 	h = h.Replace(TEXT("<br/>&nbsp;<i></i>"), TEXT(""));							//for nodes missing a second line
 	h = h.Replace(TEXT("<br/><i></i>"), TEXT(""));									//for nodes missing a second line
 	h = h.Replace(TEXT("<b></b>"), TEXT(""));
