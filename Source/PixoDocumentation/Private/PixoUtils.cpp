@@ -129,7 +129,7 @@ FString PixoUtils::createColorString(FLinearColor color, float alpha, float expo
 
 	FString c = "#" + rgb.ToFColor(true).ToHex();
 
-	if (c == "#0000FF")		//so, it's fudged.
+	if (c == "#0000FF" || c == "#0000FFFF")		//so, it's fudged.
 		return "#9999FF";
 
 	return c;
