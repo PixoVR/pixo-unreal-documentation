@@ -115,6 +115,9 @@ FString PixoUtils::createColorString(FLinearColor color, float alpha, float expo
 	//L = powf(L, 2.2f);			// to sRGB
 	L = powf(L, 1/exponent);		// our gamma correct
 
+	if (L < 0.3f)
+		L = 0.4f;
+
 	HSLtoRGB(H, S, L, &R, &G, &B);
 
 	FLinearColor rgb(R, G, B, alpha);
