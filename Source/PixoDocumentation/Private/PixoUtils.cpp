@@ -115,8 +115,8 @@ FString PixoUtils::createColorString(FLinearColor color, float alpha, float expo
 	//L = powf(L, 2.2f);			// to sRGB
 	L = powf(L, 1/exponent);		// our gamma correct
 
-	if (L < 0.3f)
-		L = 0.4f;
+	//if (L < 0.3f)					// sometimes there's a parse error, or just a dark color.  We just clip it here.
+	//	L = 0.4f;
 
 	HSLtoRGB(H, S, L, &R, &G, &B);
 
@@ -127,7 +127,12 @@ FString PixoUtils::createColorString(FLinearColor color, float alpha, float expo
 
 	rgb = rgb.GetClamped();
 
-	return "#"+rgb.ToFColor(true).ToHex();
+	FString c = "#" + rgb.ToFColor(true).ToHex();
+
+	if (c == "#0000FF")		//so, it's fudged.
+		return "#9999FF";
+
+	return c
 }
 
 FString PixoUtils::createVariableName(FString name)
