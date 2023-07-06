@@ -132,7 +132,7 @@ FString PixoUtils::createColorString(FLinearColor color, float alpha, float expo
 	if (c == "#0000FF")		//so, it's fudged.
 		return "#9999FF";
 
-	return c
+	return c;
 }
 
 FString PixoUtils::createVariableName(FString name)
