@@ -1257,8 +1257,8 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	//if a comment is visible, add it as a node and connect the arrow
 	if (hasBubble)
 	{
-		float lineHeight = 17.0f;
-		float margin = 25.0f;
+		float lineHeight = 12.0f;
+		float margin = 30.0f;
 
 		//float cposx = posx + (type==NodeType::route ? -.228f : 0.0f);	//&reg;
 		float cposx = posx + (type == NodeType::route ? -.226f : 0.0f);	//&#10752;
