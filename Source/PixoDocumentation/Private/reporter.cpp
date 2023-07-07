@@ -52,8 +52,8 @@ reporter::reporter(FString _reportType, FString _outputDir, FString _stylesheet,
 	NodeStyle.Add("_STYLESHEET_", stylesheet);
 	NodeStyle.Add("_GRAPHBG_", "transparent");
 	//NodeStyle.Add("_GRAPHBG_", "#F1F1F1");	//can't do it this way.  Use css instead.
-	//NodeStyle.Add("_FONTNAME_", "Arial");
-	NodeStyle.Add("_FONTNAME_", "Helvetica");
+	NodeStyle.Add("_FONTNAME_", "Arial");
+	//NodeStyle.Add("_FONTNAME_", "Helvetica");
 	NodeStyle.Add("_FONTSIZE_", "10");		//for header/title
 	NodeStyle.Add("_FONTSIZE2_", "9");		//for header/title2
 	NodeStyle.Add("_FONTCOLOR_", "black");		//for header/title
