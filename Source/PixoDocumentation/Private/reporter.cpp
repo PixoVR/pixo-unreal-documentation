@@ -819,6 +819,10 @@ bool reporter::getNodeHasBubble(UEdGraphNode *n)
 	hasBubble |= n->bCommentBubblePinned;
 	hasBubble |= n->ShouldMakeCommentBubbleVisible();
 
+	UEdGraphNode_Comment* commentNode = dynamic_cast<UEdGraphNode_Comment*>(n);
+	if (commentNode)
+		hasBubble = false;
+
 	return hasBubble;
 }
 
