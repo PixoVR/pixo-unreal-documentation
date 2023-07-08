@@ -43,7 +43,10 @@ void materialReporter::report(int &graphCount, int &ignoredCount, int &failedCou
 			//Load with LOAD_NoWarn and LOAD_DisableCompileOnLoad.
 			UMaterialInterface * LoadedMaterial = Cast<UMaterialInterface>(StaticLoadObject(Asset.GetClass(), /*Outer =*/nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_DisableCompileOnLoad));
 			//UMaterialInterface* LoadedMaterial = Cast<UMaterialInterface>(StaticLoadObject(Asset.GetClass(), /*Outer =*/nullptr, *AssetPath, nullptr, LOAD_None));
-			if (LoadedMaterial == nullptr || !LoadedMaterial->IsValidLowLevel())
+			if (LoadedMaterial == nullptr
+				|| !LoadedMaterial->IsValidLowLevel()
+				|| !LoadedMaterial->GetClass()->IsValidLowLevel()
+				)
 			{
 				failedCount++;
 				wcerr << "Failed to load: " << *AssetPath << endl;
