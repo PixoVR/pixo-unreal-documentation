@@ -28,7 +28,7 @@ void blueprintReporter::report(int &graphCount, int &ignoredCount, int &failedCo
 
 			//Load with LOAD_NoWarn and LOAD_DisableCompileOnLoad.
 			UBlueprint* LoadedBlueprint = Cast<UBlueprint>(StaticLoadObject(Asset.GetClass(), /*Outer =*/nullptr, *AssetPath, nullptr, LOAD_NoWarn | LOAD_DisableCompileOnLoad));
-			if (LoadedBlueprint == nullptr)
+			if (LoadedBlueprint == nullptr || !LoadedBlueprint->IsValidLowLevel())
 			{
 				failedCount++;
 				wcerr << "Failed to load: " << *AssetPath << endl;
