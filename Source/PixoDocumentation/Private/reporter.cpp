@@ -1157,6 +1157,10 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	UEdGraphNode_Comment* commentNode = dynamic_cast<UEdGraphNode_Comment*>(n);
 	FLinearColor titleColor = (commentNode) ? commentNode->CommentColor : n->GetNodeTitleColor();
 
+	FLinearColor titleTextColor = FLinearColor::Black;
+	if (titleColor.LinearRGBToHSV().B < .6f)
+		titleTextColor = FLinearColor::White;
+
 #if ENGINE_MAJOR_VERSION >= 5
 	int commentSize = (commentNode) ? commentNode->GetFontSize() : 18;
 #else
@@ -1245,6 +1249,7 @@ void reporter::writeNodeBody(FString prefix, UEdGraphNode* n)
 	NodeStyle.Add("_HEADERCOLORDIM_", createColorString(titleColor * 0.5f, 1.0f, 1.0f));
 	NodeStyle.Add("_HEADERCOLORLIGHT_", createColorString(titleColor, 1.0f, 3.0f));
 	NodeStyle.Add("_HEADERCOLORTRANS_", createColorString(titleColor, 0.5f));
+	NodeStyle.Add("_HEADERTEXTCOLOR_", createColorString(titleTextColor);
 	NodeStyle.Add("_CLASS_", typeGroup);
 	NodeStyle.Add("_URL_", url);				//URL = "\ref SomeSubgraph"
 	NodeStyle.Add("_PORTROWS_", prepNodePortRows(prefix+_tab+_tab,n,visiblePins));
