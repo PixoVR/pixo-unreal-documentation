@@ -90,7 +90,7 @@ int32 UPixoDocumentationCommandlet::Main(const FString& Params)
 
 	int32 result = pd.report();
 
-	return result;
+	return (result > 0);
 }
 
 /**
