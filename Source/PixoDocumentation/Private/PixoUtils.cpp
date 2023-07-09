@@ -274,9 +274,9 @@ _NODENAME_ [
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
-			<table style="rounded" fontcolor="_HEADERTEXTCOLOR_" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_COMPOSITEPADDING_">
+			<table style="rounded" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_COMPOSITEPADDING_">
 				<tr>
-					<td align="left" balign="left" colspan="4"><b>_NODETITLE_</b><br/><i>_NODETITLE2_</i></td>
+					<td align="left" balign="left" colspan="4"><font color="_HEADERTEXTCOLOR_"><b>_NODETITLE_</b><br/><i>_NODETITLE2_</i></b></td>
 				</tr>
 _PORTROWS_
 			</table>
@@ -297,7 +297,7 @@ _NODENAME_ [
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
-			<table style="rounded" align="left" fontcolor="_HEADERTEXTCOLOR_" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_COMPOSITEPADDING_">
+			<table style="rounded" align="left" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_COMPOSITEPADDING_">
 				<tr>
 					<td align="center" balign="center" fixedsize="true" width="_COMPACTWIDTH_" height="1" colspan="4"><font color="_COMPACTCOLOR_" point-size="_COMPACTSIZE_"><b>_NODETITLE_</b></font></td>
 				</tr>
@@ -498,7 +498,7 @@ _NODENAME_ [
 
 	label=<
 		<table fixedsize="true" border="0" width="1" height="1" cellborder="0" cellspacing="0" cellpadding="0"><tr><td>
-			<table style="rounded" align="left" fontcolor="_HEADERTEXTCOLOR_" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_COMPOSITEPADDING_">
+			<table style="rounded" align="left" bgcolor='_HEADERCOLORLIGHT_' border="1" cellborder="0" cellspacing="0" cellpadding="_COMPOSITEPADDING_">
 				<tr>
 					<td align="center" balign="center" fixedsize="true" width="_COMPACTWIDTH_" height="1" colspan="4"><font color="_COMPACTCOLOR_" point-size="_COMPACTSIZE_"><b>SET</b></font></td>
 				</tr>
