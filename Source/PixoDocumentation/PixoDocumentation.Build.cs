@@ -29,6 +29,8 @@ public class PixoDocumentation : ModuleRules
 			new string[]
 			{
 				"Core",
+				//"Engine",
+				//"UnrealEd",
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
@@ -50,10 +52,10 @@ public class PixoDocumentation : ModuleRules
 
 				"BlueprintGraph",
 				"ImageWrapper",
+				"RenderCore",		//needed for UE5.1+
 				//"HTTP",
 				//"Json",
 				//"RHI",
-				//"RenderCore",
 				//"Launch"
 				// ... add private dependencies that you statically link with here ...	
 			}

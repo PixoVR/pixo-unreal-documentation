@@ -881,7 +881,7 @@ FString PixoUtils::getPinDefaultValue(UEdGraphPin* pin)
 
 	float r, g, b, a;
 	//if (swscanf_s(*v, TEXT("(R=%f,G=%f,B=%f,A=%f)"), &r, &g, &b, &a) == 4)
-	if (swscanf(TCHAR_TO_WCHAR(*v), L"(R=%f,G=%f,B=%f,A=%f)", &r, &g, &b, &a) == 4)
+	if (swscanf_s(TCHAR_TO_WCHAR(*v), L"(R=%f,G=%f,B=%f,A=%f)", &r, &g, &b, &a) == 4)
 	{
 		FLinearColor c(r, g, b, a);
 		return FString::Printf(TEXT("<font color=\"%s\">%s</font>"), *createColorString(c), *cicon);
@@ -889,7 +889,7 @@ FString PixoUtils::getPinDefaultValue(UEdGraphPin* pin)
 	}
 
 	//if (swscanf_s(*v, TEXT("(R=%f,G=%f,B=%f)"), &r, &g, &b) == 3)
-	if (swscanf(TCHAR_TO_WCHAR(*v), L"(R=%f,G=%f,B=%f)", &r, &g, &b) == 3)
+	if (swscanf_s(TCHAR_TO_WCHAR(*v), L"(R=%f,G=%f,B=%f)", &r, &g, &b) == 3)
 	{
 		FLinearColor c(r, g, b);
 		return FString::Printf(TEXT("<font color=\"%s\">%s</font>"), *createColorString(c), *cicon);

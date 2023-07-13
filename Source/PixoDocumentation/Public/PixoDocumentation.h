@@ -9,7 +9,7 @@
  *
  * This will examine loaded .uasset files for blueprints and materials,
  * generating dot-syntax pseudo code for doxygen to parse, creating
- * an svg representation of these things.
+ * a .dot and therefore an svg representation of these graphs.
  *
  * Once, generated, internal links to other aspects of the code in a plugin
  * will be linked and browsable.
@@ -18,9 +18,10 @@
  * providing multiple plugins (or even a whole project), one could document
  * much more in a single go.
  *
- * The thing(s) to publish are provided in the constructor parameter FString
- * PixoDocumentation::includePaths.  Some paths, like `/engine` and `/game`
- * are excluded by default so we don't scan all of Unreal for output.
+ * The thing(s) to publish are provided in the constructor parameter (FString)
+ * reporter::IncludeFolders.  reporter::IgnoreFolders can be
+ * used to exclude items.  Usually you would include a root folder and exclude
+ * subfolders, as the default is to exclude.
  */
 
 class PixoDocumentation

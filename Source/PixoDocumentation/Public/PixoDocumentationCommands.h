@@ -12,7 +12,7 @@ class FPixoDocumentationCommands : public TCommands<FPixoDocumentationCommands>
 public:
 
 	FPixoDocumentationCommands()
-		: TCommands<FPixoDocumentationCommands>(TEXT("PixoDocumentation"), NSLOCTEXT("Contexts", "PixoDocumentation", "PixoDocumentation Plugin"), NAME_None, FPixoDocumentationStyle::GetStyleSetName())
+		: TCommands<FPixoDocumentationCommands>(TEXT("Pixo Documentation"), NSLOCTEXT("Contexts", "Pixo Documentation", "Pixo Documentation Plugin"), NAME_None, FPixoDocumentationStyle::GetStyleSetName())
 	{
 	}
 

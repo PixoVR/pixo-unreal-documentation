@@ -6,8 +6,8 @@
 
 void FPixoDocumentationCommands::RegisterCommands()
 {
-	//UI_COMMAND(PluginAction, "PixoDocumentation", "Execute PixoDocumentation action", EUserInterfaceActionType::Button, FInputGesture());
-	UI_COMMAND(PluginAction, "PixoDocumentation", "Execute PixoDocumentation action", EUserInterfaceActionType::Button, FInputChord());
+	//UI_COMMAND(PluginAction, "Pixo Documentation", "Execute Pixo Documentation action", EUserInterfaceActionType::Button, FInputGesture());
+	UI_COMMAND(PluginAction, "Pixo Documentation", "Execute Pixo Documentation action", EUserInterfaceActionType::Button, FInputChord());
 }
 
 #undef LOCTEXT_NAMESPACE

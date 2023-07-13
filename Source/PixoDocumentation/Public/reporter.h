@@ -10,7 +10,7 @@ using namespace std;
 using namespace PixoUtils;
 
 #include "CoreMinimal.h"
-#include "AssetData.h"
+//#include "AssetRegistry/AssetData.h"
 
 #include "K2Node.h"
 #include "K2Node_Composite.h"

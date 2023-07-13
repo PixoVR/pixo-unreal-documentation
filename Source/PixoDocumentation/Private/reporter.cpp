@@ -4,7 +4,7 @@
 
 #include "Runtime/Launch/Resources/Version.h"
 
-#include "AssetRegistryModule.h"
+#include "AssetRegistry/AssetRegistryModule.h"
 
 #include "Engine/ObjectLibrary.h"
 #include "Engine/Texture2D.h"
@@ -112,7 +112,7 @@ void reporter::report(int &graphCount, int &ignoredCount, int &failedCount)
 	{
 		if (shouldReportAsset(Asset))
 		{
-			FString const AssetPath = Asset.ObjectPath.ToString();
+			FString const AssetPath = Asset.GetObjectPathString(); // ObjectPath.ToString();
 			FString const AssetName = Asset.AssetName.ToString();
 			FString const PackagePath = Asset.PackagePath.ToString();
 
@@ -235,7 +235,7 @@ FString reporter::getGraphCPP(UEdGraph* graph, FString _namespace)
 bool reporter::shouldReportAsset(FAssetData const& Asset)
 {
 	//FString path = Asset.GetPackage
-	FString path = Asset.ObjectPath.ToString();
+	FString path = Asset.GetObjectPathString(); // ObjectPath.ToString();
 
 	//wcout << "Checking " << *path << endl;
 
@@ -1377,8 +1377,11 @@ bool reporter::createThumbnailFile(UObject* object, FString pngPath)
 
 	//wcout << "FNAME: |" << *fullName << "|" << endl;
 
-	//FLinkerLoad* Linker = package->GetLinker();	//NO! Won't work.
+#if ENGINE_MAJOR_VERSION >= 5
+	FLinkerLoad* Linker = package->GetLinker();	//NO! Won't work.
+#else
 	FLinkerLoad* Linker = package->LinkerLoad;
+#endif
 
 	if (Linker && Linker->SerializeThumbnails(true))
 	{

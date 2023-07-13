@@ -36,7 +36,7 @@ void materialReporter::report(int &graphCount, int &ignoredCount, int &failedCou
 	{
 		if (shouldReportAsset(Asset))
 		{
-			FString const AssetPath = Asset.ObjectPath.ToString();
+			FString const AssetPath = Asset.GetObjectPathString(); // .ObjectPath.ToString();
 			//FString const AssetName = Asset.AssetName.ToString();
 			//FString const PackagePath = Asset.PackagePath.ToString();
 
@@ -530,7 +530,7 @@ void materialReporter::writeMaterialMembers(UMaterial* material, FString what)
 
 #if ENGINE_MAJOR_VERSION >= 5
 			//case EMaterialParameterType::StaticSwitch:
-			case EMaterialParameterType::NumRuntime:
+			//case EMaterialParameterType::NumRuntime:
 			case EMaterialParameterType::Num:
 #else
 			case EMaterialParameterType::Count:

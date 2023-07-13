@@ -22,7 +22,7 @@ void blueprintReporter::report(int &graphCount, int &ignoredCount, int &failedCo
 	{
 		if (shouldReportAsset(Asset))
 		{
-			FString const AssetPath = Asset.ObjectPath.ToString();
+			FString const AssetPath = Asset.GetObjectPathString();// .ObjectPath.ToString();
 			//FString const AssetName = Asset.AssetName.ToString();
 			//FString const PackagePath = Asset.PackagePath.ToString();
 
