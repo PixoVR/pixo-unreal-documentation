@@ -112,7 +112,11 @@ void reporter::report(int &graphCount, int &ignoredCount, int &failedCount)
 	{
 		if (shouldReportAsset(Asset))
 		{
-			FString const AssetPath = Asset.GetObjectPathString(); // ObjectPath.ToString();
+#if ENGINE_MAJOR_VERSION >= 5
+			FString const AssetPath = Asset.GetObjectPathString();
+#else
+			FString const AssetPath = Asset.ObjectPath.ToString();
+#endif
 			FString const AssetName = Asset.AssetName.ToString();
 			FString const PackagePath = Asset.PackagePath.ToString();
 
@@ -235,7 +239,13 @@ FString reporter::getGraphCPP(UEdGraph* graph, FString _namespace)
 bool reporter::shouldReportAsset(FAssetData const& Asset)
 {
 	//FString path = Asset.GetPackage
-	FString path = Asset.GetObjectPathString(); // ObjectPath.ToString();
+#if ENGINE_MAJOR_VERSION >= 5
+	FString path = Asset.GetObjectPathString();
+#else
+	FString path = Asset.ObjectPath.ToString();
+#endif
+
+
 
 	//wcout << "Checking " << *path << endl;
 
