@@ -36,7 +36,11 @@ void materialReporter::report(int &graphCount, int &ignoredCount, int &failedCou
 	{
 		if (shouldReportAsset(Asset))
 		{
+#if ENGINE_MAJOR_VERSION >= 5
 			FString const AssetPath = Asset.GetObjectPathString(); // .ObjectPath.ToString();
+#else
+			FString const AssetPath = Asset.ObjectPath().ToString();
+#endif
 			//FString const AssetName = Asset.AssetName.ToString();
 			//FString const PackagePath = Asset.PackagePath.ToString();
 
