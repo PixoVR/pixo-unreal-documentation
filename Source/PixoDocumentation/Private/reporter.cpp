@@ -533,7 +533,7 @@ FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FStr
 	//&reg;
 	//&#10122;
 	FString routeTemplate = R"PixoVR(<tr>
-	<td port="port" href="_PINURL_" title="_NODECOMMENT_" color="_INCOLOR_">&#9673;</td>
+	<td port="port" href="_PINURL_" title="_NODECOMMENT_" color="_PINCOLOR_">&#9673;</td>
 </tr>)PixoVR";
 
 	//min size 80
@@ -563,6 +563,8 @@ FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FStr
 	FString rows;
 
 	vmap pindata;
+	pindata.Add("_PINCOLOR_", "_PINDEFAULTCOLOR_");
+
 	pindata.Add("_INPORT_", "");
 	pindata.Add("_INICON_", "&nbsp;");
 	pindata.Add("_INLABEL_", "&nbsp;");
@@ -648,6 +650,7 @@ FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FStr
 			color = getPinColor(i);
 			isConnected = i->HasAnyConnections();
 
+			pindata["_PINCOLOR_"] = color;
 			pindata["_INPORT_"] = dport;
 			pindata["_INICON_"] = getPinIcon(i);
 			pindata["_INLABEL_"] = isCompact ? "" : getPinLabel(i);
@@ -690,6 +693,7 @@ FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FStr
 			color = getPinColor(o);
 			isConnected = o->HasAnyConnections();
 
+			pindata["_PINCOLOR_"] = color;
 			pindata["_OUTPORT_"] = sport;
 			pindata["_OUTICON_"] = getPinIcon(o);
 			pindata["_OUTLABEL_"] = isCompact ? "" : getPinLabel(o);
