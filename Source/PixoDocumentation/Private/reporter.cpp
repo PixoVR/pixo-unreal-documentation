@@ -533,7 +533,7 @@ FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FStr
 	//&reg;
 	//&#10122;
 	FString routeTemplate = R"PixoVR(<tr>
-	<td port="port" href="_PINURL_" title="_NODECOMMENT_">&#9899;</td>
+	<td port="port" href="_PINURL_" title="_NODECOMMENT_" color="_INCOLOR_">&#9673;</td>
 </tr>)PixoVR";
 
 	//min size 80
