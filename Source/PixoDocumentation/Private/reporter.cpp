@@ -73,7 +73,7 @@ reporter::reporter(FString _reportType, FString _outputDir, FString _stylesheet,
 	NodeStyle.Add("_COMMENTPADDING_", "7");
 	NodeStyle.Add("_COMPOSITEPADDING_", "4");	// 5 ?
 	NodeStyle.Add("_COMPACTCOLOR_", "#888888");
-	NodeStyle.Add("_COMPACTSIZE_", "17");
+	NodeStyle.Add("_COMPACTSIZE_", "16");
 	NodeStyle.Add("_COMPACTWIDTH_", "100");
 
 	NodeStyle.Add("_HEIGHTSPACER_", "<font color=\"transparent\" point-size=\"12\">&thinsp;</font>");
