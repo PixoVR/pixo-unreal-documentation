@@ -12,8 +12,12 @@ RUN	doxygen -v	# confirm doxygen version from docs-docker-base
 
 ADD	$CACHEBREAKER skipcache
 
-RUN	git submodule set-branch --branch main documentation/docs-doxygen && \
-	git submodule update --init documentation/docs-doxygen
+# ensure the doxygen stuff is most up to date
+RUN	cd /build && \
+	git submodule update --init --recursive && \
+	cd documentation/docs-doxygen && git pull origin main
+
+RUN	git fetch --tags
 
 #ADD	$CACHEBREAKER skipcache
 
