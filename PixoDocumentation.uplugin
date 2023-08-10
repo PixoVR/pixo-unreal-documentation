@@ -24,7 +24,14 @@
 		{
 			"Name": "PixoDocumentation",
 			"Type": "Editor",
-			"LoadingPhase": "Default"
+			"LoadingPhase": "Default",
+			"EnabledByDefault": true,
+			"PlatformAllowList": [
+				"Win64",
+				"Android",
+				"Linux",
+				"Mac"
+			]
 		}
 	]
 }

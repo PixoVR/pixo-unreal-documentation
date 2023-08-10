@@ -36,7 +36,7 @@ std::wostream & operator << (std::wostream &out, const TCHAR *c)
 }
 #endif
 
-namespace PixoUtils
+namespace DocUtils
 {
 	typedef TMap<FString, FString> vmap;	//name value pairs
 

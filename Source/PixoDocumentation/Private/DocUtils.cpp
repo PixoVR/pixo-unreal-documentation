@@ -1,6 +1,6 @@
 // (c) 2023 PixoVR
 
-#include "PixoUtils.h"
+#include "DocUtils.h"
 
 #include "Misc/DefaultValueHelper.h"
 #include "Misc/FileHelper.h"
@@ -10,9 +10,9 @@
 #include <string>
 using namespace std;
 
-using namespace PixoUtils;
+using namespace DocUtils;
 
-FString PixoUtils::htmlentities(FString in)
+FString DocUtils::htmlentities(FString in)
 {
 	//TArray<int> reps = { 34,39,60,61,62 };	// " ' < = >
 	TArray<int> reps = { 34,39 };	// " '
@@ -43,7 +43,7 @@ FString PixoUtils::htmlentities(FString in)
 
 //https://vocal.com/video/rgb-and-hsvhsihsl-color-space-conversion/
 
-void PixoUtils::RGBtoHSL(float R, float G, float B, float* h, float* s, float* l)
+void DocUtils::RGBtoHSL(float R, float G, float B, float* h, float* s, float* l)
 {
 	float Cmax = fmax(R, fmax(G, B));
 	float Cmin = fmin(R, fmin(G, B));
@@ -68,7 +68,7 @@ void PixoUtils::RGBtoHSL(float R, float G, float B, float* h, float* s, float* l
 	*l = L;
 }
 
-void PixoUtils::HSLtoRGB(float H, float S, float L, float* r, float* g, float* b)
+void DocUtils::HSLtoRGB(float H, float S, float L, float* r, float* g, float* b)
 {
 	float c = (1.0f - fabs(2.0f * L - 1)) * S;
 	float x = c * (1 - fabs(fmod(H/60.0f, 2.0f) - 1.0f));
@@ -93,7 +93,7 @@ void PixoUtils::HSLtoRGB(float H, float S, float L, float* r, float* g, float* b
 	*b = bp + m;
 }
 
-FString PixoUtils::createColorString(FLinearColor color, float alpha, float exponent)
+FString DocUtils::createColorString(FLinearColor color, float alpha, float exponent)
 {
 	//return "#"+color.ToFColor(true).ToHex();
 
@@ -132,7 +132,7 @@ FString PixoUtils::createColorString(FLinearColor color, float alpha, float expo
 	return c;
 }
 
-FString PixoUtils::createVariableName(FString name)
+FString DocUtils::createVariableName(FString name)
 {
 	std::string g(TCHAR_TO_UTF8(*name));
 
@@ -145,13 +145,13 @@ FString PixoUtils::createVariableName(FString name)
 	return variableName;
 }
 
-FString PixoUtils::getClassName(UClass* _class)
+FString DocUtils::getClassName(UClass* _class)
 {
 	FString className = _class->GetPrefixCPP() + _class->GetFName().ToString();
 	return className;
 }
 
-void PixoUtils::addAllGraphs(TArray<UEdGraph*>& container, TArray<UEdGraph*>& graphs)
+void DocUtils::addAllGraphs(TArray<UEdGraph*>& container, TArray<UEdGraph*>& graphs)
 {
 	for (UEdGraph* g : graphs)
 	{
@@ -160,7 +160,7 @@ void PixoUtils::addAllGraphs(TArray<UEdGraph*>& container, TArray<UEdGraph*>& gr
 	}
 }
 
-FString PixoUtils::getTrimmedConfigFilePath(FString path)
+FString DocUtils::getTrimmedConfigFilePath(FString path)
 {
 	FString confdir = FPaths::ProjectConfigDir();
 	confdir.RemoveFromEnd("/");
@@ -178,7 +178,7 @@ FString PixoUtils::getTrimmedConfigFilePath(FString path)
 	return trimmed;
 }
 
-FString PixoUtils::prepTemplateString(FString prefix, vmap style, FString string)
+FString DocUtils::prepTemplateString(FString prefix, vmap style, FString string)
 {
 	FString h = prefix + string;
 
@@ -219,7 +219,7 @@ FString PixoUtils::prepTemplateString(FString prefix, vmap style, FString string
 	return h;
 }
 
-NodeType PixoUtils::getNodeType(UEdGraphNode* node, NodeType defaultType)
+NodeType DocUtils::getNodeType(UEdGraphNode* node, NodeType defaultType)
 {
 	FString stype = node->GetClass()->GetFName().ToString();
 	NodeType type = NodeType_e.FindOrAdd(stype, defaultType);
@@ -239,13 +239,13 @@ NodeType PixoUtils::getNodeType(UEdGraphNode* node, NodeType defaultType)
 	return type;
 }
 
-FString PixoUtils::getNodeTypeGroup(NodeType type)
+FString DocUtils::getNodeTypeGroup(NodeType type)
 {
 	return *NodeType_e.FindKey(type);
 }
 
 
-FString PixoUtils::getNodeTemplate(NodeType type, bool hasDelegate)
+FString DocUtils::getNodeTemplate(NodeType type, bool hasDelegate)
 {
 	//magic node types:
 //	(all types, except those noted below) // regular node
@@ -264,7 +264,7 @@ FString PixoUtils::getNodeTemplate(NodeType type, bool hasDelegate)
 	{
 	case NodeType::materialcomposite:
 	case NodeType::composite:			//composite	//no icon, no header color, may be multi-line title
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -282,12 +282,12 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
 	case NodeType::compact:		//compact
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -305,13 +305,13 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
 	case NodeType::materialtunnel:
 	case NodeType::materialnode:
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -330,7 +330,7 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
@@ -340,7 +340,7 @@ _PORTROWS_
 
 		if (hasDelegate)
 		{
-			t = R"PixoVR(
+			t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -360,11 +360,11 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 		}
 		else
 		{
-			t = R"PixoVR(
+			t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -383,7 +383,7 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 		}
 
 		break;
@@ -394,7 +394,7 @@ _PORTROWS_
 
 		if (hasDelegate)
 		{
-			t = R"PixoVR(
+			t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -414,11 +414,11 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 		}
 		else
 		{
-			t = R"PixoVR(
+			t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -437,13 +437,13 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 		}
 
 		break;
 
 	case NodeType::comment:		//comment node
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME_ [
 	layer="comments"
 	pos="_POS_"
@@ -463,12 +463,12 @@ _NODENAME_ [
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
 	case NodeType::variable:	//variable node
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -483,12 +483,12 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
 	case NodeType::variableset:		//variableset
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -506,13 +506,13 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
 	case NodeType::bubble:		//bubble node
 
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME__comment [
 	layer=bubbles
 	pos="_POS_"
@@ -532,12 +532,12 @@ _NODENAME__comment [
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
 	case NodeType::route:		//route node
-		t = R"PixoVR(
+		t = R"LONGRAW(
 _NODENAME_ [
 	layer="nodes"
 	pos="_POS_"
@@ -551,7 +551,7 @@ _PORTROWS_
 			</table>
 		</td></tr></table>
 	>
-];)PixoVR";
+];)LONGRAW";
 
 		break;
 
@@ -565,7 +565,7 @@ _PORTROWS_
 	return t;
 }
 
-FString PixoUtils::getNodeTooltip(UEdGraphNode* node)
+FString DocUtils::getNodeTooltip(UEdGraphNode* node)
 {
 	FString tooltip = node->GetTooltipText().ToString();
 	tooltip = tooltip.Replace(TEXT("\\"), TEXT("\\\\"));
@@ -584,7 +584,7 @@ FString PixoUtils::getNodeTooltip(UEdGraphNode* node)
 	return tooltip;
 }
 
-FString PixoUtils::getNodeIcon(UEdGraphNode* node)
+FString DocUtils::getNodeIcon(UEdGraphNode* node)
 {
 	NodeType type = getNodeType(node);
 
@@ -625,7 +625,7 @@ FString PixoUtils::getNodeIcon(UEdGraphNode* node)
 	}
 }
 
-FString PixoUtils::getDelegateIcon(UEdGraphNode* node, bool *hasDelegate)
+FString DocUtils::getDelegateIcon(UEdGraphNode* node, bool *hasDelegate)
 {
 	const TArray< UEdGraphPin* > pins = node->Pins;
 	//const TArray< UEdGraphPin* > pins = n->GetAllPins();
@@ -649,7 +649,7 @@ FString PixoUtils::getDelegateIcon(UEdGraphNode* node, bool *hasDelegate)
 	return "&nbsp;";
 }
 
-bool PixoUtils::isDelegatePin(UEdGraphPin* pin)
+bool DocUtils::isDelegatePin(UEdGraphPin* pin)
 {
 	if (pin->Direction == EEdGraphPinDirection::EGPD_Output)
 	{	//if (p->PinType == FEdGraphPinType::
@@ -660,7 +660,7 @@ bool PixoUtils::isDelegatePin(UEdGraphPin* pin)
 	return false;
 }
 
-FString PixoUtils::getPinLabel(UEdGraphPin* p)
+FString DocUtils::getPinLabel(UEdGraphPin* p)
 {
 	FString n;
 
@@ -682,7 +682,7 @@ FString PixoUtils::getPinLabel(UEdGraphPin* p)
 	return n;
 }
 
-FString PixoUtils::getPinTooltip(UEdGraphPin* p, TMap<FString,FString>visiblePins)
+FString DocUtils::getPinTooltip(UEdGraphPin* p, TMap<FString,FString>visiblePins)
 {
 	FString hover;
 	UEdGraphNode* n = p->GetOwningNode();
@@ -704,7 +704,7 @@ FString PixoUtils::getPinTooltip(UEdGraphPin* p, TMap<FString,FString>visiblePin
 	return hover;
 }
 
-FString PixoUtils::getPinType(UEdGraphPin* pin, bool useSchema)
+FString DocUtils::getPinType(UEdGraphPin* pin, bool useSchema)
 {
 	FEdGraphPinType y = pin->PinType;
 
@@ -745,7 +745,7 @@ FString PixoUtils::getPinType(UEdGraphPin* pin, bool useSchema)
 	return FName::NameToDisplayString(t, false);
 }
 
-FString PixoUtils::getPinURL(UEdGraphPin* pin)
+FString DocUtils::getPinURL(UEdGraphPin* pin)
 {
 	FString url="";
 
@@ -756,7 +756,7 @@ FString PixoUtils::getPinURL(UEdGraphPin* pin)
 }
 
 // straight up copied from SGraphNode.cpp
-bool PixoUtils::pinShouldBeVisible(UEdGraphPin* InPin, TMap<FString, FString> visiblePins)
+bool DocUtils::pinShouldBeVisible(UEdGraphPin* InPin, TMap<FString, FString> visiblePins)
 {
 	if (visiblePins.Num())
 	{
@@ -797,7 +797,7 @@ bool PixoUtils::pinShouldBeVisible(UEdGraphPin* InPin, TMap<FString, FString> vi
 	return bShowPin;
 }
 
-FString PixoUtils::getPinPort(UEdGraphPin* p)
+FString DocUtils::getPinPort(UEdGraphPin* p)
 {
 	UEdGraphNode* n = p->GetOwningNode();
 	bool isRoute = getNodeType(n, NodeType::node) == NodeType::route;
@@ -808,7 +808,7 @@ FString PixoUtils::getPinPort(UEdGraphPin* p)
 	return "P_"+p->PinId.ToString();
 }
 
-FString PixoUtils::getPinDefaultValue(UEdGraphPin* pin)
+FString DocUtils::getPinDefaultValue(UEdGraphPin* pin)
 {
 	FString v = pin->DefaultValue;
 
@@ -914,7 +914,7 @@ FString PixoUtils::getPinDefaultValue(UEdGraphPin* pin)
 	return FString::Printf(TEXT("<font color=\"_VALCOLOR_\">[%s]</font>"), *v);
 }
 
-FString PixoUtils::getCppType(FProperty *prop)
+FString DocUtils::getCppType(FProperty *prop)
 {
 	TArray<FString> containers{ "TMap","TSet","TArray" };
 
@@ -933,7 +933,7 @@ FString PixoUtils::getCppType(FProperty *prop)
 	return type;
 }
 
-FString PixoUtils::getPinColor(UEdGraphPin* pin)
+FString DocUtils::getPinColor(UEdGraphPin* pin)
 {
 	FLinearColor c = FLinearColor::Black;
 
@@ -960,7 +960,7 @@ FString PixoUtils::getPinColor(UEdGraphPin* pin)
 	return createColorString(c);
 }
 
-FString PixoUtils::getPinIcon(UEdGraphPin* pin)
+FString DocUtils::getPinIcon(UEdGraphPin* pin)
 {
 	bool isConnected = pin->HasAnyConnections();
 	FString type = getPinType(pin);
