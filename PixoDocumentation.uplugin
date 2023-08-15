@@ -14,24 +14,12 @@
 	"IsBetaVersion": false,
 	"IsExperimentalVersion": false,
 	"Installed": true,
-	"SupportedTargetPlatforms": [
-		"Win64",
-		"Linux",
-		"Android",
-		"Mac"
-	],
 	"Modules": [
 		{
 			"Name": "PixoDocumentation",
 			"Type": "Editor",
 			"LoadingPhase": "Default",
-			"EnabledByDefault": true,
-			"PlatformAllowList": [
-				"Win64",
-				"Android",
-				"Linux",
-				"Mac"
-			]
+			"EnabledByDefault": true
 		}
 	]
 }
