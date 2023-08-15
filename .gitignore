@@ -31,8 +31,10 @@ tags
 
 # ====== UNREAL ======
 
-# Visual Studio 2015 user specific files
+# Visual Studio specific files
 .vs/
+**/.vsconfig
+.vsconfig
 
 # Compiled Object files
 *.slo
