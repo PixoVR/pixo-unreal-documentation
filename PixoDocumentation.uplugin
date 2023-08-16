@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "PixoVR Documentation",
-	"Description": "Doxygen output for Unreal plugins. Supports Blueprints and Materials.",
+	"Description": "Doxygen output for Unreal plugins and projects",
 	"Category": "PixoVR",
 	"CreatedBy": "PixoVR",
 	"CreatedByURL": "https://pixovr.com",
