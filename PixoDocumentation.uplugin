@@ -6,14 +6,10 @@
 	"Description": "Doxygen output for Unreal plugins and projects",
 	"Category": "PixoVR",
 	"CreatedBy": "PixoVR",
-	"CreatedByURL": "https://pixovr.com",
-	"DocsURL": "https://github.com/PixoVR/pixo-unreal-documentation.git",
-	"MarketplaceURL": "",
-	"SupportURL": "https://docs.pixovr.com",
-	"CanContainContent": true,
-	"IsBetaVersion": false,
-	"IsExperimentalVersion": false,
-	"Installed": false,
+	"CreatedByURL": "https://www.pixovr.com",
+	"DocsURL": "https://docs.pixovr.com/documentation",
+	"EnabledByDefault": true,
+	"CanContainContent": false,
 	"Modules": [
 		{
 			"Name": "PixoDocumentation",
