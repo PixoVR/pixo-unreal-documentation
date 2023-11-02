@@ -99,6 +99,8 @@ void reporter::loadAssets(FName loadClass)
 	AssetRegistryModule.Get().SearchAllAssets(/*bSynchronousSearch =*/true);
 
 	AssetRegistryModule.Get().GetAssetsByClass(loadClass, assetList, true);
+	//AssetRegistryModule.Get().GetAssetsByClass(FTopLevelAssetPath(loadClass), assetList, true);
+	//          AssetRegistry.GetAssetsByClass(FTopLevelAssetPath(AActor::StaticClass()->GetPathName()), AssetDataList, true);
 
 	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(),*loadClass.ToString()));
 }
@@ -107,8 +109,10 @@ void reporter::report(int &graphCount, int &ignoredCount, int &failedCount)
 {
 	LOG( "Parsing " + reportType + "..." );
 
-	loadAssets(UBlueprint::StaticClass()->GetFName());			//BlueprintBaseClassName
+	loadAssets(UBlueprint::StaticClass()->GetFName());		//BlueprintBaseClassName
 	loadAssets(UMaterialInterface::StaticClass()->GetFName());	//MaterialBaseClassName
+	//loadAssets(UBlueprint::StaticClass()->GetPathName());		//BlueprintBaseClassName
+	//loadAssets(UMaterialInterface::StaticClass()->GetPathName());	//MaterialBaseClassName
 
 	for (FAssetData const& Asset : assetList)
 	{
