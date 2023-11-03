@@ -45,29 +45,34 @@ public:
 	reporter(FString type, FString _outputDir, FString _stylesheet, FString _groups);
 	virtual ~reporter();
 
-	virtual void loadAssets(FName loadClass="");
+#if ENGINE_MAJOR_VERSION >= 5
+	virtual void loadAssetsByPath(FTopLevelAssetPath loadPath);	//UE5.1
+#else
+	virtual void loadAssets(FName loadClass);		//UE4.27
+#endif
+
 	virtual void report(int &graphCount, int &ignoredCount, int &failedCount);
 
-	static TArray<FString>	GroupList;			//the list of groups reported
-	static TArray<FString>	IgnoreFolders;		//folders to ignore
-	static TArray<FString>	IncludeFolders;		//folders to include
+	static TArray<FString>		GroupList;		//the list of groups reported
+	static TArray<FString>		IgnoreFolders;		//folders to ignore
+	static TArray<FString>		IncludeFolders;		//folders to include
 
 protected:
 	FName				reportClassName;
 	FString				reportType;
 	FString				stylesheet;
 	FString				groups;
-	FString				outputDir = "-";			//use "-" for stdout
+	FString				outputDir = "-";	//use "-" for stdout
 	FString				currentDir = "";
 
-	TArray<FAssetData>	assetList;
+	TArray<FAssetData>		assetList;
 
 	vmap				NodeStyle;
 
-	TMap<UEdGraph*, FString>		GraphDescriptions;		//assuming parent graphs are parsed before children.  This is the description provided in the collapse node of the parent.
-	TMap<FString, TArray<FString>>	GraphCalls;				//any node (url) mentioned in a graph is appended to the call graph.
-	TArray<FString>					GalleryList;			//list of image entries for the gallery.  Should be cleared before each group (Blueprint/Material/etc.)
-	TMap<FString, FString>			pinConnections;			//intended to be [SOURCE:port:_ -- DEST:port:_] [color], which forces uniqueness of connections despite direction
+	TMap<UEdGraph*, FString>	GraphDescriptions;	//assuming parent graphs are parsed before children.  This is the description provided in the collapse node of the parent.
+	TMap<FString, TArray<FString>>	GraphCalls;		//any node (url) mentioned in a graph is appended to the call graph.
+	TArray<FString>			GalleryList;		//list of image entries for the gallery.  Should be cleared before each group (Blueprint/Material/etc.)
+	TMap<FString, FString>		inConnections;		//intended to be [SOURCE:port:_ -- DEST:port:_] [color], which forces uniqueness of connections despite direction
 
 	virtual void LOG(FString message);
 	virtual void LOG(FString verbosity,FString message);

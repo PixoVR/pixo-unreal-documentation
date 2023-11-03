@@ -91,28 +91,41 @@ reporter::~reporter()
 {
 }
 
-void reporter::loadAssets(FName loadClass)
+#if ENGINE_MAJOR_VERSION >= 5
+void reporter::loadAssetsByPath(FTopLevelAssetPath loadPath)
 {
-	LOG("Loading Asset Class: "+loadClass.ToString()+"...");
+	LOG("Loading Asset Class: " + loadPath.ToString() + "...");
 
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 	AssetRegistryModule.Get().SearchAllAssets(/*bSynchronousSearch =*/true);
+	AssetRegistryModule.Get().GetAssetsByClass(FTopLevelAssetPath(loadPath), assetList, true);
 
-	AssetRegistryModule.Get().GetAssetsByClass(loadClass, assetList, true);
-	//AssetRegistryModule.Get().GetAssetsByClass(FTopLevelAssetPath(loadClass), assetList, true);
-	//          AssetRegistry.GetAssetsByClass(FTopLevelAssetPath(AActor::StaticClass()->GetPathName()), AssetDataList, true);
-
-	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(),*loadClass.ToString()));
+	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(), *loadPath.ToString()));
 }
+#else
+void reporter::loadAssets(FName loadClass)
+{
+	LOG("Loading Asset Class: " + loadClass.ToString() + "...");
+
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
+	AssetRegistryModule.Get().SearchAllAssets(/*bSynchronousSearch =*/true);
+	AssetRegistryModule.Get().GetAssetsByClass(loadClass, assetList, true);
+
+	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(), *loadClass.ToString()));
+}
+#endif
 
 void reporter::report(int &graphCount, int &ignoredCount, int &failedCount)
 {
 	LOG( "Parsing " + reportType + "..." );
 
+#if ENGINE_MAJOR_VERSION >= 5
+	loadAssetsByPath(FTopLevelAssetPath(UBlueprint::StaticClass()->GetPathName()));		//BlueprintBaseClassName
+	loadAssetsByPath(FTopLevelAssetPath(UMaterialInterface::StaticClass()->GetPathName()));	//MaterialBaseClassName
+#else
 	loadAssets(UBlueprint::StaticClass()->GetFName());		//BlueprintBaseClassName
 	loadAssets(UMaterialInterface::StaticClass()->GetFName());	//MaterialBaseClassName
-	//loadAssets(UBlueprint::StaticClass()->GetPathName());		//BlueprintBaseClassName
-	//loadAssets(UMaterialInterface::StaticClass()->GetPathName());	//MaterialBaseClassName
+#endif
 
 	for (FAssetData const& Asset : assetList)
 	{
