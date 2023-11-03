@@ -24,7 +24,6 @@ using namespace DocUtils;
 
 #include "Kismet2/BlueprintEditorUtils.h"
 
-
 DEFINE_LOG_CATEGORY_STATIC(LOG_DOT, Log, All);
 
 /**
@@ -72,7 +71,7 @@ protected:
 	TMap<UEdGraph*, FString>	GraphDescriptions;	//assuming parent graphs are parsed before children.  This is the description provided in the collapse node of the parent.
 	TMap<FString, TArray<FString>>	GraphCalls;		//any node (url) mentioned in a graph is appended to the call graph.
 	TArray<FString>			GalleryList;		//list of image entries for the gallery.  Should be cleared before each group (Blueprint/Material/etc.)
-	TMap<FString, FString>		inConnections;		//intended to be [SOURCE:port:_ -- DEST:port:_] [color], which forces uniqueness of connections despite direction
+	TMap<FString, FString>		pinConnections;		//intended to be [SOURCE:port:_ -- DEST:port:_] [color], which forces uniqueness of connections despite direction
 
 	virtual void LOG(FString message);
 	virtual void LOG(FString verbosity,FString message);

@@ -24,7 +24,11 @@ materialReporter::materialReporter(FString _outputDir, FString _stylesheet, FStr
 : reporter("materials", _outputDir, _stylesheet, _groups)
 {
 	//MaterialBaseClassName
+#if ENGINE_MAJOR_VERSION >= 5
+	loadAssetsByPath(FTopLevelAssetPath(UMaterialInterface::StaticClass()->GetPathName()));
+#else
 	loadAssets(UMaterialInterface::StaticClass()->GetFName());
+#endif
 }
 
 void materialReporter::report(int &graphCount, int &ignoredCount, int &failedCount)

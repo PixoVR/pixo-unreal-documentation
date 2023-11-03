@@ -10,7 +10,11 @@ blueprintReporter::blueprintReporter(FString _outputDir, FString _stylesheet, FS
 : reporter("blueprints", _outputDir, _stylesheet, _groups)
 {
 	//BlueprintBaseClassName
+#if ENGINE_MAJOR_VERSION >= 5
+	loadAssetsByPath(FTopLevelAssetPath(UBlueprint::StaticClass()->GetPathName()));
+#else
 	loadAssets(UBlueprint::StaticClass()->GetFName());
+#endif
 }
 
 void blueprintReporter::report(int &graphCount, int &ignoredCount, int &failedCount)
