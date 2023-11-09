@@ -1,15 +1,16 @@
 {
 	"FileVersion": 3,
 	"Version": 1,
-	"VersionName": "1.0",
+	"VersionName": "1.0.2",
 	"FriendlyName": "PixoVR Documentation",
-	"Description": "Doxygen output for Unreal plugins and projects",
+	"Description": "Doxygen output for plugins and projects",
 	"Category": "PixoVR",
 	"CreatedBy": "PixoVR",
 	"CreatedByURL": "https://www.pixovr.com",
 	"DocsURL": "https://docs.pixovr.com/documentation",
 	"EnabledByDefault": true,
 	"CanContainContent": false,
+
 	"Modules": [
 		{
 			"Name": "PixoDocumentation",
