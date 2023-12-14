@@ -64,7 +64,7 @@ void blueprintReporter::report(int &graphCount, int &ignoredCount, int &failedCo
 		"blueprints",
 		"Blueprints",
 		"Blueprints found in the **$(PROJECT_NAME)** library.",
-		"	The blueprint system may contain multiple graph classes(Event Graph, Construction Graph, etc)\n"
+		"	The blueprint system may contain multiple graph classes (Event Graph, Construction Graph, etc)\n"
 		"	per blueprint, and each graph may contain subgraphs.  Links to subgraphs can be accessed by\n"
 		"	clicking on their collapsed node or by navigating to the additional entries in the class."
 	);
