@@ -1,5 +1,9 @@
 
 html/*
+generated/*
+pages/generated_configs.dox
 *.swp
 *.swo
 *~
+
+.DS_Store

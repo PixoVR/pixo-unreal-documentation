@@ -91,24 +91,41 @@ reporter::~reporter()
 {
 }
 
-void reporter::loadAssets(FName loadClass)
+#if ENGINE_MAJOR_VERSION >= 5
+void reporter::loadAssetsByPath(FTopLevelAssetPath loadPath)
 {
-	LOG("Loading Asset Class: "+loadClass.ToString()+"...");
+	LOG("Loading Asset Class: " + loadPath.ToString() + "...");
 
 	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
 	AssetRegistryModule.Get().SearchAllAssets(/*bSynchronousSearch =*/true);
+	AssetRegistryModule.Get().GetAssetsByClass(FTopLevelAssetPath(loadPath), assetList, true);
 
+	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(), *loadPath.ToString()));
+}
+#else
+void reporter::loadAssets(FName loadClass)
+{
+	LOG("Loading Asset Class: " + loadClass.ToString() + "...");
+
+	FAssetRegistryModule& AssetRegistryModule = FModuleManager::LoadModuleChecked<FAssetRegistryModule>(AssetRegistryConstants::ModuleName);
+	AssetRegistryModule.Get().SearchAllAssets(/*bSynchronousSearch =*/true);
 	AssetRegistryModule.Get().GetAssetsByClass(loadClass, assetList, true);
 
-	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(),*loadClass.ToString()));
+	LOG(FString::Printf(TEXT("Found %d %s instances in asset registry."), assetList.Num(), *loadClass.ToString()));
 }
+#endif
 
 void reporter::report(int &graphCount, int &ignoredCount, int &failedCount)
 {
 	LOG( "Parsing " + reportType + "..." );
 
-	loadAssets(UBlueprint::StaticClass()->GetFName());			//BlueprintBaseClassName
+#if ENGINE_MAJOR_VERSION >= 5
+	loadAssetsByPath(FTopLevelAssetPath(UBlueprint::StaticClass()->GetPathName()));		//BlueprintBaseClassName
+	loadAssetsByPath(FTopLevelAssetPath(UMaterialInterface::StaticClass()->GetPathName()));	//MaterialBaseClassName
+#else
+	loadAssets(UBlueprint::StaticClass()->GetFName());		//BlueprintBaseClassName
 	loadAssets(UMaterialInterface::StaticClass()->GetFName());	//MaterialBaseClassName
+#endif
 
 	for (FAssetData const& Asset : assetList)
 	{
@@ -157,12 +174,12 @@ void reporter::reportGroup(FString groupName, FString groupNamePretty, FString b
 
 	GroupList.Add(groupName);
 
-	FString tmpl(R"PixoVR(/**
+	FString tmpl(R"LONGRAW(/**
 	\defgroup {0} {1}
 	\brief {2}
 
 {3}
-{4}*/)PixoVR");
+{4}*/)LONGRAW");
 
 	FString gallery = "";
 
@@ -174,11 +191,11 @@ void reporter::reportGroup(FString groupName, FString groupNamePretty, FString b
 		for (FString e : GalleryList)
 		{	galleryItems += "	" + e + "\n";	}
 
-		FString gtmpl(R"PixoVR(
+		FString gtmpl(R"LONGRAW(
 	<h2 class='groupheader'>Gallery</h2>
 	<div class='gallery'>
 {0}	</div>
-)PixoVR");
+)LONGRAW");
 
 		gallery = FString::Format(*gtmpl, { galleryItems });
 	}
@@ -429,7 +446,7 @@ void reporter::writeGraphHeader(FString prefix, UEdGraph* graph, FString qualifi
 		*out << *prefix << *_tab << "\\details " << *details << endl;
 	*out << *prefix << *_tab << "\\dot " << *graphNameHuman << endl;
 	*out << *prefix << *_tab << "graph " << *graphNameVariable << " {";
-	*out << *prepTemplateString(prefix + _tab + _tab, NodeStyle, R"PixoVR(
+	*out << *prepTemplateString(prefix + _tab + _tab, NodeStyle, R"LONGRAW(
 graph [
 	layout="fdp"
 	overlap="true"
@@ -463,7 +480,7 @@ node [
 	shape="plain"
 	fixedsize="shape"
 	color="_BORDERCOLOR_"
-];)PixoVR");
+];)LONGRAW");
 	*out << endl;
 }
 
@@ -516,44 +533,44 @@ bool reporter::urlCheck2(FString &blueprintClassName, FString &variableName, UEd
 FString reporter::prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FString, FString> visiblePins)
 {
 	//both
-	FString nodeTemplate_11 = R"PixoVR(<tr>
+	FString nodeTemplate_11 = R"LONGRAW(<tr>
 	<td colspan="2" align="left"  balign="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
 	<td colspan="2" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
-</tr>)PixoVR";
+</tr>)LONGRAW";
 
 	//left
-	FString nodeTemplate_10 = R"PixoVR(<tr>
+	FString nodeTemplate_10 = R"LONGRAW(<tr>
 	<td colspan="2" align="left" balign="left" href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
 	<td colspan="2"></td>
-</tr>)PixoVR";
+</tr>)LONGRAW";
 
-	FString nodeTemplate_01 = R"PixoVR(<tr>
+	FString nodeTemplate_01 = R"LONGRAW(<tr>
 	<td colspan="2"></td>
 	<td colspan="2" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
-</tr>)PixoVR";
+</tr>)LONGRAW";
 
 	//&reg;
 	//&#10122;
-	FString routeTemplate = R"PixoVR(<tr>
+	FString routeTemplate = R"LONGRAW(<tr>
 	<td port="port" href="_PINURL_" title="_NODECOMMENT_"><font color="_PINCOLOR_">&#9673;</font></td>
-</tr>)PixoVR";
+</tr>)LONGRAW";
 
 	//min size 80
-	FString variableTemplate = R"PixoVR(<tr>
+	FString variableTemplate = R"LONGRAW(<tr>
 	<td colspan="2"></td>
 	<td colspan="2" width="80" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
-</tr>)PixoVR";
+</tr>)LONGRAW";
 
 	//min size 80
-	FString variableTemplate2 = R"PixoVR(<tr>
+	FString variableTemplate2 = R"LONGRAW(<tr>
 	<td colspan="2" width="40" align="left"  balign="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
 	<td colspan="2" width="40" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_OUTVALUE__HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_OUTLABEL_</font> <font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
-</tr>)PixoVR";
+</tr>)LONGRAW";
 
-	FString variablesetTemplate = R"PixoVR(<tr>
+	FString variablesetTemplate = R"LONGRAW(<tr>
 	<td colspan="2" align="left"  balign="left"  href="_PINURL_" title="_INTOOLTIP_"  port="_INPORT_"><font point-size="_FONTSIZEPORT_" color="_INCOLOR_">_INICON_</font> <font point-size="_FONTSIZEPORT_" color="_FONTCOLOR_">_INLABEL_</font>_HEIGHTSPACER__INVALUE_</td>
 	<td colspan="2" align="right" balign="right" href="_PINURL_" title="_OUTTOOLTIP_" port="_OUTPORT_">_HEIGHTSPACER_<font point-size="_FONTSIZEPORT_" color="_OUTCOLOR_">_OUTICON_</font></td>
-</tr>)PixoVR";
+</tr>)LONGRAW";
 
 	bool isRoute = getNodeType(node, NodeType::node) == NodeType::route;
 	bool isVariable = getNodeType(node, NodeType::node) == NodeType::variable;
@@ -860,7 +877,7 @@ void reporter::writeAssetCalls(FString className)
 	*out << endl;
 	*out << "#include \"" << *className << ".h\"" << endl;
 
-	*out << R"PixoVR(
+	*out << R"LONGRAW(
 /*
 	This is fake C++ that doxygen will parse for call graph entries.
 
@@ -869,7 +886,7 @@ void reporter::writeAssetCalls(FString className)
 
 	We use the URLs of the nodes to make this list.
 */
-)PixoVR" << endl;
+)LONGRAW" << endl;
 
 	for (const TPair<FString, TArray<FString> >& e : GraphCalls)
 	{

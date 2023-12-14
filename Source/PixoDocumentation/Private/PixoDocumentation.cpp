@@ -5,7 +5,7 @@
 #include "blueprintReporter.h"
 #include "materialReporter.h"
 
-using namespace PixoUtils;
+using namespace DocUtils;
 
 /**
  * @brief Constructor for PixoDocumentation.
