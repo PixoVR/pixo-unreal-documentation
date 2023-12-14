@@ -95,7 +95,7 @@ void PixoDocumentation::reportResults()
 	FString results = FString::Printf(
 	TEXT(
 		"======================================================================================\n"
-		"Examined %d graphs(s).\n"
+		"Examined %d graphs.\n"
 		"Ignored %d blueprints(s).\n"
 		"Ignored %d materials(s).\n"
 		"Report Completed with %d assets that failed to load.\n"
