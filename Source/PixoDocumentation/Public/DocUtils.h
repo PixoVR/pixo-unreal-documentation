@@ -36,6 +36,12 @@ std::wostream & operator << (std::wostream &out, const TCHAR *c)
 }
 #endif
 
+#if ENGINE_MAJOR_VERSION >= 5 || ENGINE_MINOR_VERSION >= 4
+typedef TObjectPtr<UEdGraph> EdGraphPtr;
+#else
+typedef UEdGraph* EdGraphPtr;
+#endif
+
 namespace DocUtils
 {
 	typedef TMap<FString, FString> vmap;	//name value pairs
@@ -178,7 +184,7 @@ namespace DocUtils
 	FString prepNodePortRows(FString prefix, UEdGraphNode* node, TMap<FString, FString> visiblePins = TMap<FString, FString>());
 
 	//graph stuff
-	void addAllGraphs(TArray<UEdGraph*> &container, TArray<UEdGraph*> &graphs);
+	void addAllGraphs(TArray<EdGraphPtr> &container, TArray<EdGraphPtr> &graphs);
 
 	//node stuff
 	NodeType getNodeType(UEdGraphNode* node, NodeType defaultType=NodeType::none);

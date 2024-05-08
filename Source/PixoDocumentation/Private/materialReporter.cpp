@@ -155,7 +155,7 @@ int materialReporter::reportMaterial(FString prefix, UMaterialInterface* materia
 		GalleryList.Add(galleryEntry);
 	}
 
-	TArray<UEdGraph*> graphs;
+	TArray<EdGraphPtr> graphs;
 
 	//UEdGraph* graph = material->MaterialGraph;
 	UMaterialGraph* graph = material->MaterialGraph;
@@ -717,7 +717,7 @@ bool materialReporter::urlCheck1(UEdGraph* &igraph, UEdGraph* &ograph, UEdGraph 
 
 			if (mat)
 			{
-				TArray<UEdGraph*> graphs;
+				TArray<EdGraphPtr> graphs;
 				UEdGraph* g = mat->MaterialGraph;
 				graphs.Add(g);
 				addAllGraphs(graphs, g->SubGraphs);

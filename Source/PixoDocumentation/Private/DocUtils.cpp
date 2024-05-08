@@ -151,7 +151,7 @@ FString DocUtils::getClassName(UClass* _class)
 	return className;
 }
 
-void DocUtils::addAllGraphs(TArray<UEdGraph*>& container, TArray<UEdGraph*>& graphs)
+void DocUtils::addAllGraphs(TArray<EdGraphPtr>& container, TArray<EdGraphPtr>& graphs)
 {
 	for (UEdGraph* g : graphs)
 	{

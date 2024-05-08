@@ -1383,7 +1383,7 @@ int reporter::reportMaterial(FString prefix, UMaterialInterface* materialInterfa
 	UE_LOG(LOG_DOT, Display, TEXT("%sExtends: %s"), *prefix, *parentClass);
 	//UE_LOG(LOG_DOT, Display, TEXT("%sDescription: %s"), *prefix, *(description.Replace(TEXT("\\n"), TEXT(" || "))));
 
-	TArray<UEdGraph*> graphs;
+	TArray<EdGraphPtr> graphs;
 
 	//UEdGraph* graph = material->MaterialGraph;
 	UMaterialGraph* graph = material->MaterialGraph;
